@@ -159,7 +159,7 @@ public class Account extends Controller {
 		
 		Form<UserSetPassword> filledForm = resetPasswordForm.bindFromRequest();
 		
-		// TODO: @Constraints.MinLength(6) doesn't seem to work for some reason, so checking it manually here for now
+		// @Constraints.MinLength(6) doesn't seem to work for some reason, so checking it manually instead
 		if (filledForm.field("password").valueOr("").length() < 6)
 			filledForm.reject("password", "The password must be at least 6 characters long.");
 		
@@ -219,7 +219,7 @@ public class Account extends Controller {
 			email.setHostName(host);
 			email.setDebug(Application.debug);
 			email.setFrom(from, fromName);
-			email.setSubject("[DAISY Pipeline 2] "+subject); // TODO: customizable subject prefix
+			email.setSubject("[DAISY Pipeline 2] "+subject);
 			email.setHtmlMsg(html);
 			email.setTextMsg(text);
 			email.addTo(recipientEmail, recipientName);

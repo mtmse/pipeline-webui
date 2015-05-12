@@ -143,12 +143,15 @@
 		</h2>
 		<br/>
 		<ul style="list-style-type:none;text-align:left;padding-top:20px;"><li id="message-latest">
-			@if(fwkJob.messages.size()>0){
-				<pre>@fwkJob.messages.get(fwkJob.messages.size()-1).text</pre>
+		    <pre>&nbsp;</pre>
+	    </li></ul>
+	    
+			<!--@@if(fwkJob.messages.size()>0){
+				<pre>@@fwkJob.messages.get(fwkJob.messages.size()-1).text</pre>
 			}else{
 				<pre>&nbsp;</pre>
 			}
-		</li></ul>
+		</li></ul>-->
 	</div>
 	
 	<div id="status-idle" style="display:none;">
@@ -157,7 +160,7 @@
 	
 	<div id="status-error" style="display:none;">
 		<h2 role="status" class="text-error">Failed</h2>
-		<p>See the message log for details.</p>
+		<p>See the execution log for details.</p>
 	</div>
 	
 	<script type="text/javascript">
@@ -180,17 +183,41 @@
 	</div>
 </div>
 
+
 <h2>Execution Log</h2>
 
 <br/>
 <a class="btn btn-info" href="@routes.Jobs.getLog(fwkJob.id)" target="_blank"><span class="icon-download-alt icon-white"></span> Download Detailed Log</a>
 <br/><br/>
 
-<ol aria-live="polite" role="log" class="messagelist" id="message-list">
-	@for(message <- fwkJob.messages){
-		<li id="m@message.sequence" value="@message.sequence"><span class="message @("text-error".when(org.daisy.pipeline.client.models.job.Message.Level.ERROR==message.level)) @("text-warning".when(org.daisy.pipeline.client.models.job.Message.Level.WARNING==message.level))"">@message.text</span></li>
-	}
-</ol>
+<p id="message-list-loading"><em>
+	<span aria-live="none">
+		<span id="runningDotLog1"                       >&nbsp;.&nbsp; &nbsp; &nbsp;</span>
+		<span id="runningDotLog2" style="display: none;">&nbsp;.&nbsp;.&nbsp; &nbsp;</span>
+		<span id="runningDotLog3" style="display: none;">&nbsp;.&nbsp;.&nbsp;.&nbsp;</span>
+	</span>
+	<script type="text/javascript">
+		window.setInterval(function(){
+			if ($("#runningDotLog1").is(":visible")) {
+				$("#runningDotLog1").hide();
+				$("#runningDotLog2").show();
+				
+			} else if ($("#runningDotLog2").is(":visible")) {
+				$("#runningDotLog2").hide();
+				$("#runningDotLog3").show();
+				
+			} else {
+				$("#runningDotLog3").hide();
+				$("#runningDotLog1").show();
+			}
+		},1000);
+	</script>
+</em></p>
+<ol aria-live="polite" role="log" class="messagelist" id="message-list" style="display:none;"></ol>
+
+<!--@@for(message <- fwkJob.messages){
+	<li id="m@@message.sequence" value="@@message.sequence"><span class="message @@("text-error".when(org.daisy.pipeline.client.models.job.Message.Level.ERROR==message.level)) @@("text-warning".when(org.daisy.pipeline.client.models.job.Message.Level.WARNING==message.level))"">@@message.text</span></li>
+}-->
 
 <br/><br/><br/>
 
@@ -211,6 +238,8 @@
 				$("#message-list").append(li);
 				$("#message-latest").html("<pre>"+message.text+"</pre>");
 			}
+			$("#message-list").show();
+			$("#message-list-loading").hide();
 		});
 		Notifications.listen("job-status-@fwkJob.id", function(status){
 			@for(status <- org.daisy.pipeline.client.models.Job.Status.values()){
@@ -308,51 +337,53 @@
 		};
 		Notifications.listen("job-results-@fwkJob.id", updateResults);
 		@if(fwkJob.results!=null){
-			var results = @Html(play.libs.Json.toJson(fwkJob.results).toString());
+			var results = @Html(play.libs.Json.toJson(fwkJob.getResults()).toString());
 			updateResults(results);
 		}
 		
-		if (Math.abs(new Date().getTime() - @(new Date().getTime())) > 1000) {
-			// You probably arrived through the back/forward buttons; reload the page contents dynamically
-			$.ajax({
-				url: "@routes.Jobs.getJobJson(fwkJob.id)?"+new Date().getTime(),
-				error: function(jqXHR, textStatus, errorThrown) {
-					// error; too bad :(
-				},
-				success: function(job, textStatus, jqXHR) {
-					// updating page contents dynamically...
-					clearInterval(updateFuzzyCreatedInterval);
-					clearInterval(updateFuzzyStartedInterval);
-					clearInterval(updateFuzzyFinishedInterval);
-					$("#created").html(new Date(job.created)+"");
-					$("#started").html(new Date(job.started)+"");
-					$("#finished").html(new Date(job.finished)+"");
-					updateFuzzy("created-fuzzy", new Date(job.created));
-					updateFuzzy("started-fuzzy", new Date(job.started));
-					updateFuzzy("finished-fuzzy", new Date(job.finished));
-					
-					$("#id").html(job.id);
-					$("#header-nicename, #nicename").html(job.nicename);
-					$("#scriptid").html(job.scriptId);
-					$("#scriptname").html(job.scriptName);
-					$("#username").html(job.userNicename);
-					$("#userid").html(job.user);
-					
-					@for(status <- org.daisy.pipeline.client.models.Job.Status.values()){
-						$("#status-@(status.toString().toLowerCase())").hide();
-					}
-					$("#status-"+job.status.toLowerCase()).show();
-					
-					$("#message-list li").remove();
-					for (var m = 0; m < job.messages.length; m++) {
-						$("#message-list").append('<li id="m'+job.messages[m].sequence+'" value="'+job.messages[m].sequence+'"><span class="message '+(job.messages[m].level==="ERROR"?"message-error":"")+(job.messages[m].level==="WARNING"?"message-warn":"")+'">'+job.messages[m].text+'</span></li>');
-					}
-					if (job.messages.length > 0) {
-						$("#message-latest").html("<pre>"+job.messages[job.messages.length-1].text+"</pre>");
-					}
+		// Dynamically load page contents
+		$.ajax({
+			url: "@routes.Jobs.getJobJson(fwkJob.id)?"+new Date().getTime(),
+			error: function(jqXHR, textStatus, errorThrown) {
+				console.log("could not retrieve JSON for job", textStatus, errorThrown);
+				// error; too bad :(
+			},
+			success: function(job, textStatus, jqXHR) {
+				// updating page contents dynamically...
+				clearInterval(updateFuzzyCreatedInterval);
+				clearInterval(updateFuzzyStartedInterval);
+				clearInterval(updateFuzzyFinishedInterval);
+				$("#created").html(new Date(job.created)+"");
+				$("#started").html(new Date(job.started)+"");
+				$("#finished").html(new Date(job.finished)+"");
+				updateFuzzy("created-fuzzy", new Date(job.created));
+				updateFuzzy("started-fuzzy", new Date(job.started));
+				updateFuzzy("finished-fuzzy", new Date(job.finished));
+				
+				$("#id").html(job.id);
+				$("#header-nicename, #nicename").html(job.nicename);
+				$("#scriptid").html(job.scriptId);
+				$("#scriptname").html(job.scriptName);
+				$("#username").html(job.userNicename);
+				$("#userid").html(job.user);
+				
+				@for(status <- org.daisy.pipeline.client.models.Job.Status.values()){
+					$("#status-@(status.toString().toLowerCase())").hide();
 				}
-			});
-		}
+				$("#status-"+job.status.toLowerCase()).show();
+				
+				$("#message-list li").remove();
+				console.log(job);
+				for (var m = 0; m < job.messages.length; m++) {
+					$("#message-list").append('<li id="m'+job.messages[m].sequence+'" value="'+job.messages[m].sequence+'"><span class="message '+(job.messages[m].level==="ERROR"?"message-error":"")+(job.messages[m].level==="WARNING"?"message-warn":"")+'">'+job.messages[m].text+'</span></li>');
+				}
+				if (job.messages.length > 0) {
+					$("#message-latest").html("<pre>"+job.messages[job.messages.length-1].text+"</pre>");
+				}
+				$("#message-list").show();
+				$("#message-list-loading").hide();
+			}
+		});
 	});
 </script>
 

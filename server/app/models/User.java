@@ -43,7 +43,7 @@ public class User extends Model {
 	private static final long serialVersionUID = 1L;
 
 
-	public static final Long LINK_TIMEOUT = 24*3600*1000L; // TODO: make as admin setting instead
+	public static final Long LINK_TIMEOUT = 24*3600*1000L;
 	
 	public static final Long JS_MAX_INT = +9007199254740992L;
 	public static final Long JS_MIN_INT = -9007199254740992L;

@@ -131,7 +131,7 @@ public class Job extends Model implements Comparable<Job> {
 
 		pushNotifier = Akka.system().scheduler().schedule(
 				Duration.create(0, TimeUnit.SECONDS),
-				Duration.create(1000, TimeUnit.MILLISECONDS), // change to maybe every 10s when callbacks are activated?
+				Duration.create(1000, TimeUnit.MILLISECONDS), // change to maybe every 10s if callbacks are activated
 				new Runnable() {
 					public void run() {
 						try {
@@ -181,11 +181,6 @@ public class Job extends Model implements Comparable<Job> {
 								}
 							}
 							
-							for (org.daisy.pipeline.client.models.job.Message message : job.messages) {
-								Notification notification = new Notification("job-message-"+job.id, message);
-								NotificationConnection.pushJobNotification(webUiJob.user, notification);
-							}
-							
 							if (!job.status.equals(lastStatus.get(job.id))) {
 								lastStatus.put(job.id, job.status);
 								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+job.id, job.status));
@@ -204,9 +199,23 @@ public class Job extends Model implements Comparable<Job> {
 								webUiJob.save(Application.datasource);
 							}
 							
-							if (job.messages.size() > 0) {
-								Job.lastMessageSequence.put(job.id, job.messages.get(job.messages.size()-1).sequence);
+							try {
+								List<org.daisy.pipeline.client.models.job.Message> messages = job.getMessagesAsList();
+								
+								for (org.daisy.pipeline.client.models.job.Message message : messages) {
+									Notification notification = new Notification("job-message-"+job.id, message);
+									NotificationConnection.pushJobNotification(webUiJob.user, notification);
+								}
+								
+								if (messages.size() > 0) {
+									Job.lastMessageSequence.put(job.id, messages.get(messages.size()-1).sequence);
+								}
+								
+							} catch (Pipeline2WSException e) {
+								Logger.error("An error occured while trying to parse the job messages for job "+job.id, e);
+								e.printStackTrace();
 							}
+							
 						} catch (javax.persistence.PersistenceException e) {
 							// Ignores this exception that happens on shutdown:
 							// javax.persistence.PersistenceException: java.sql.SQLException: Attempting to obtain a connection from a pool that has already been shutdown.

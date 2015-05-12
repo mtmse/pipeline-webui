@@ -268,7 +268,7 @@ public class Files {
 		for (String fileName : files.keySet()) {
 			Logger.debug("adding to ZIP: "+fileName);
 			if (files.get(fileName).isDirectory()) {
-				// TODO
+				// ignore empty directories
 			} else {
 				InputStream in = new FileInputStream(files.get(fileName));
 				// Add ZIP entry to output stream.

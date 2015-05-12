@@ -188,7 +188,7 @@ public class Administrator extends Controller {
 			Setting.set("mail.smtp.port", filledForm.field("port").valueOr(""));
 			Setting.set("mail.smtp.ssl", filledForm.field("ssl").valueOr(""));
 			Setting.set("mail.from.name", "Pipeline 2");
-			Setting.set("mail.from.email", session("email")); // TODO: make configurable
+			Setting.set("mail.from.email", session("email"));
 		}
 	}
 
@@ -785,7 +785,6 @@ public class Administrator extends Controller {
 
 	public static Cancellable shuttingDown = null;
 	public static Cancellable shutdownProgramatically(int delay) {
-		// TODO: If running in desktop mode; shutdown after a period of inactivity?
 
 		// Shutdown only allowed in desktop mode
 		if (!"desktop".equals(Application.deployment()))

@@ -40,6 +40,7 @@ import play.libs.XPath;
 import play.mvc.*;
 import utils.ContentType;
 import utils.Files;
+import views.html.defaultpages.error;
 
 public class Jobs extends Controller {
 
@@ -129,16 +130,22 @@ public class Jobs extends Controller {
 		if (user == null)
 			return redirect(routes.Login.login());
 		
+		Logger.debug("getJob("+id+")");
+		
 		Pipeline2WSResponse response;
 		org.daisy.pipeline.client.models.Job job;
 		try {
+			Logger.debug("org.daisy.pipeline.client.Jobs.get ...");
 			response = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, null);
+			Logger.debug("org.daisy.pipeline.client.Jobs.get done");
 			
 			if (response.status != 200 && response.status != 201) {
 				return Application.error(response.status, response.statusName, response.statusDescription, response.asText());
 			}
 			
+			Logger.debug("new org.daisy.pipeline.client.models.Job ...");
 			job = new org.daisy.pipeline.client.models.Job(response.asXml());
+			Logger.debug("new org.daisy.pipeline.client.models.Job done");
 			
 		} catch (Pipeline2WSException e) {
 			Logger.error(e.getMessage(), e);
@@ -157,8 +164,12 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to view this job.");
 		}
 		
-//		webuiJob.status = job.status.toString();
-//		webuiJob.messages = job.messages;
+		webuiJob.status = job.status.toString();
+		try {
+			webuiJob.messages = job.getMessagesAsList();
+		} catch (Pipeline2WSException e) {
+			return internalServerError(e.getMessage());
+		}
 //		if (!Job.lastMessageSequence.containsKey(job.id) && job.messages.size() > 0) {
 //			Collections.sort(job.messages);
 //			Job.lastMessageSequence.put(job.id, job.messages.get(job.messages.size()-1).sequence);
@@ -208,8 +219,13 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to view this job.");
 		
 		webuiJob.status = job.status.toString();
-		webuiJob.messages = job.messages;
-		Collections.sort(job.messages);
+		try {
+			webuiJob.messages = job.getMessagesAsList();
+		} catch (Pipeline2WSException e) {
+			return play.mvc.Results.internalServerError(e.getMessage());
+		}
+//		webuiJob.messages = job.messages;
+//		Collections.sort(job.messages);
 		
 		JsonNode jobJson = play.libs.Json.toJson(webuiJob);
 		return ok(jobJson);
@@ -274,7 +290,7 @@ public class Jobs extends Controller {
 				filename = href.replaceFirst("^.*/([^/]*)$", "$1");
 			else
 				filename = id+"-"+href.replaceFirst("^[^/]*/([^/]*)/?.*?$", "$1")+".zip";
-			response().setHeader("Content-Disposition", "filename=\""+filename);
+			response().setHeader("Content-Disposition", "attachment; filename=\""+filename);
 			
 			String parse = request().getQueryString("parse");
 			if ("report".equals(parse)) {
