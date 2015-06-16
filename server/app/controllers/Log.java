@@ -30,14 +30,12 @@ public class Log extends Controller {
 	 * @return
 	 */
 	public static Result getLog(Integer shutdown) {
-		if (!"desktop".equals(Application.deployment())) {
-			if (FirstUse.isFirstUse())
-				return redirect(routes.FirstUse.getFirstUse());
-			
-			User user = User.authenticate(request(), session());
-			if (user == null || !user.admin)
-				return redirect(routes.Login.login());
-		}
+		if (FirstUse.isFirstUse())
+			return redirect(routes.FirstUse.getFirstUse());
+		
+		User user = User.authenticate(request(), session());
+		if (user == null || !user.admin)
+			return redirect(routes.Login.login());
 		
 		Result result = ok(logText("Pipeline 2 Web UI Log", null));
 		
@@ -45,7 +43,6 @@ public class Log extends Controller {
 			if (Administrator.shuttingDown != null)
 				Administrator.shuttingDown.cancel();
 			Administrator.shuttingDown = null;
-			Administrator.shutdownProgramatically(5);
 		}
 		
 		return result;
@@ -179,9 +176,9 @@ public class Log extends Controller {
 		}
 		
 		// if using Derby: derby.log
-		if ("derby".equals(Application.datasource)) {
+		File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"webui-database.log");
+		if (derbyLogFile.exists()) {
 			List<String> derbyLog = new ArrayList<String>();
-			File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"webui-database.log");
 			try {
 				FileInputStream stream = new FileInputStream(derbyLogFile);
 				try {

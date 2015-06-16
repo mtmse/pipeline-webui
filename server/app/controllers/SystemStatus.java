@@ -46,11 +46,11 @@ public class SystemStatus extends Controller {
 		status.put("theme", Application.themeName());
 		status.put("version", Application.version);
 
-		User user = User.authenticate(request(), session());
-		if (FirstUse.isFirstUse() || user != null && user.admin) {
-			status.put("datasource", Application.datasource);
-		}
-
+//		User user = User.authenticate(request(), session());
+//		if (FirstUse.isFirstUse() || user != null && user.admin) {
+//			status.put("datasource", Application.datasource);
+//		}
+		
 		return status;
 	}
 

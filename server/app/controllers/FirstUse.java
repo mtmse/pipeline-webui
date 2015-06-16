@@ -32,48 +32,28 @@ public class FirstUse extends Controller {
 			// set initial absoluteURL (will typically be "http://localhost:9000")
 			Setting.set("absoluteURL", routes.FirstUse.welcome().absoluteURL(request()).replaceFirst("^([^/]+:/+[^/]+)/.*$", "$1"));
 			
-			if (!"desktop".equals(Application.deployment()) && !"server".equals(Application.deployment())) {
-				// Application mode is not set
-				
-				User.flashBrowserId(user);
-				return ok(views.html.FirstUse.setDeployment.render(play.data.Form.form(Administrator.SetDeploymentForm.class)));
+			// Server mode
 			
-			} else if ("server".equals(Application.deployment())) {
-				// Server mode
-				
-				if (User.find.where().eq("admin", true).findRowCount() == 0) {
-					User.flashBrowserId(user);
-					return ok(views.html.FirstUse.createAdmin.render(play.data.Form.form(Administrator.CreateAdminForm.class)));
-				}
-				
-				// require authentication to complete the rest of the first use wizard
-				user = User.authenticate(request(), session());
-				if (user == null || !user.admin) {
-					return redirect(routes.Login.login());
-				}
-				
-				if (Setting.get("dp2ws.endpoint") == null) {
-					User.flashBrowserId(user);
-					return ok(views.html.FirstUse.setWS.render(play.data.Form.form(Administrator.SetWSForm.class)));
-				}
-				
-				if (Setting.get("uploads") == null) {
-					User.flashBrowserId(user);
-					flash("uploads", defaultUploadsDir());
-					return ok(views.html.FirstUse.setStorageDirs.render(play.data.Form.form(Administrator.SetStorageDirsForm.class)));
-				}
-				
-			} else if ("desktop".equals(Application.deployment())) {
-				// Desktop mode
-				
-				User admin = User.find.where().eq("email", "email@example.com").findUnique();
-				if (admin == null) {
-					admin = new User("email@example.com", "Administrator", "password", true);
-				} else {
-					admin.admin = true;
-				}
-				admin.save(Application.datasource);
-				admin.login(session());
+			if (User.find.where().eq("admin", true).findRowCount() == 0) {
+				User.flashBrowserId(user);
+				return ok(views.html.FirstUse.createAdmin.render(play.data.Form.form(Administrator.CreateAdminForm.class)));
+			}
+			
+			// require authentication to complete the rest of the first use wizard
+			user = User.authenticate(request(), session());
+			if (user == null || !user.admin) {
+				return redirect(routes.Login.login());
+			}
+			
+			if (Setting.get("dp2ws.endpoint") == null) {
+				User.flashBrowserId(user);
+				return ok(views.html.FirstUse.setWS.render(play.data.Form.form(Administrator.SetWSForm.class)));
+			}
+			
+			if (Setting.get("uploads") == null) {
+				User.flashBrowserId(user);
+				flash("uploads", defaultUploadsDir());
+				return ok(views.html.FirstUse.setStorageDirs.render(play.data.Form.form(Administrator.SetStorageDirsForm.class)));
 			}
 			
 		}
@@ -81,11 +61,6 @@ public class FirstUse extends Controller {
 		user = User.authenticate(request(), session());
 		if (user == null || !user.admin) {
 			return redirect(routes.Login.login());
-		}
-
-		if ("desktop".equals(Application.deployment()) && Pipeline2Engine.getState() != Pipeline2Engine.State.RUNNING) {
-			User.flashBrowserId(user);
-			return ok(views.html.FirstUse.configureDP2.render(Pipeline2Engine.errorMessages));
 		}
 
 		return redirect(routes.FirstUse.welcome());
@@ -149,7 +124,7 @@ public class FirstUse extends Controller {
 			
 			} else {
 				User admin = new User(filledForm.field("email").valueOr(""), "Administrator", filledForm.field("password").valueOr(""), true);
-				admin.save(Application.datasource);
+				admin.save();
 				admin.login(session());
 				
 				// Set some default configuration options
@@ -214,7 +189,7 @@ public class FirstUse extends Controller {
 	 * @return
 	 */
 	public static boolean isFirstUse() {
-		return User.findAll().size() == 0 || Setting.get("dp2ws.endpoint") == null || Setting.get("uploads") == null || "desktop".equals(Application.deployment()) && (Pipeline2Engine.cwd == null || !Pipeline2Engine.State.RUNNING.equals(Pipeline2Engine.getState()));
+		return User.findAll().size() == 0 || Setting.get("dp2ws.endpoint") == null || Setting.get("uploads") == null;
 	}
 	
 	public static String defaultUploadsDir() {
@@ -233,6 +208,7 @@ public class FirstUse extends Controller {
 	}
 	
 	public static void configureDesktopDefaults() {
+		// TODO: remove this function as it is desktop-specific
 		String uploads = defaultUploadsDir();
 		
 		Logger.info("Using as uploaded files directory: "+uploads);

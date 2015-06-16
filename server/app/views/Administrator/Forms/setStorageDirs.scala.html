@@ -19,7 +19,7 @@
 							onkeyup="if(@{models.Setting.get("uploads")==null} || this.value==='@models.Setting.get("uploads")')document.getElementById('setStorageDirs-uploaddirGroup').style.backgroundColor='#FFF';else document.getElementById('setStorageDirs-uploaddirGroup').style.backgroundColor='#DDF';"
 					/>
 					<p class="help-block">
-						<img id="setStorageDirs-uploaddirHelpLoading" src="@routes.Assets.at("images/loading-inline.gif")" alt="" style="display:none;"/>
+						<img id="setStorageDirs-uploaddirHelpLoading" src="@routes.Assets.versioned("images/loading-inline.gif")" alt="" style="display:none;"/>
 						<span id="setStorageDirs-uploaddirHelp"></span>
 					</p>
 					@if(models.Setting.get("uploads")==null && setStorageDirsForm.field("uploaddir").value() == null){
@@ -44,7 +44,7 @@
 							onkeyup="if(@{models.Setting.get("dp2ws.resultdir")==null} || this.value==='@models.Setting.get("dp2ws.resultdir")')document.getElementById('setStorageDirs-resultdirGroup').style.backgroundColor='#FFF';else document.getElementById('setStorageDirs-resultdirGroup').style.backgroundColor='#DDF';"
 					/>
 					<p class="help-block">
-						<img id="setStorageDirs-resultdirHelpLoading" src="@routes.Assets.at("images/loading-inline.gif")" alt="" style="display:none;"/>
+						<img id="setStorageDirs-resultdirHelpLoading" src="@routes.Assets.versioned("images/loading-inline.gif")" alt="" style="display:none;"/>
 						<span id="setStorageDirs-resultdirHelp"></span>
 					</p>
 					@if(models.Setting.get("dp2ws.resultdir")==null && setStorageDirsForm.field("resultdir").value() == null){
@@ -69,7 +69,7 @@
 							onkeyup="if(@{models.Setting.get("dp2ws.tempdir")==null} || this.value==='@models.Setting.get("dp2ws.tempdir")')document.getElementById('setStorageDirs-tempdirGroup').style.backgroundColor='#FFF';else document.getElementById('setStorageDirs-tempdirGroup').style.backgroundColor='#DDF';"
 					/>
 					<p class="help-block">
-						<img id="setStorageDirs-tempdirHelpLoading" src="@routes.Assets.at("images/loading-inline.gif")" alt="" style="display:none;"/>
+						<img id="setStorageDirs-tempdirHelpLoading" src="@routes.Assets.versioned("images/loading-inline.gif")" alt="" style="display:none;"/>
 						<span id="setStorageDirs-tempdirHelp"></span>
 					</p>
 					@if(models.Setting.get("dp2ws.tempdir")==null && setStorageDirsForm.field("tempdir").value() == null){

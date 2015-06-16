@@ -14,9 +14,7 @@ import org.daisy.pipeline.client.Pipeline2WSResponse;
 import org.daisy.pipeline.client.models.Script;
 
 import controllers.SystemStatus.EngineAttempt;
-
 import akka.actor.Cancellable;
-
 import models.Setting;
 import models.User;
 import models.UserSetting;
@@ -519,7 +517,7 @@ public class Administrator extends Controller {
 						updateUser.setPassword(newPassword);
 				}
 
-				updateUser.save(Application.datasource);
+				updateUser.save();
 				if (updateUser.id.equals(user.id)) {
 					session("name", user.name);
 					session("email", user.email);
@@ -540,7 +538,7 @@ public class Administrator extends Controller {
 
 			if (resetUser.active) {
 				resetUser.makeNewActivationUid();
-				resetUser.save(Application.datasource);
+				resetUser.save();
 				String resetUrl = Application.absoluteURL(routes.Account.showResetPasswordForm(resetUser.email, resetUser.getActivationUid()).absoluteURL(request()));
 				String html = views.html.Account.emailResetPassword.render(resetUrl).body();
 				String text = "Go to this link to change your password: " + resetUrl;
@@ -551,7 +549,7 @@ public class Administrator extends Controller {
 
 			} else {
 				resetUser.makeNewActivationUid();
-				resetUser.save(Application.datasource);
+				resetUser.save();
 				String activateUrl = Application.absoluteURL(routes.Account.showActivateForm(resetUser.email, resetUser.getActivationUid()).absoluteURL(request()));
 				String html = views.html.Account.emailActivate.render(activateUrl).body();
 				String text = "Go to this link to activate your account: " + activateUrl;
@@ -584,7 +582,7 @@ public class Administrator extends Controller {
 				return redirect(routes.Administrator.getSettings());
 			}
 
-			deleteUser.delete(Application.datasource);
+			deleteUser.delete();
 			flash("settings.usertab", "global");
 			flash("success", deleteUser.name + " was deleted");
 			return redirect(routes.Administrator.getSettings());
@@ -611,7 +609,7 @@ public class Administrator extends Controller {
 						"true".equals(Setting.get("mail.enable")) ? "" : filledForm.field("password").valueOr(""),
 								filledForm.field("admin").valueOr("").equals("true"));
 				newUser.makeNewActivationUid();
-				newUser.save(Application.datasource);
+				newUser.save();
 
 				if ("true".equals(Setting.get("mail.enable"))) {
 					String activateUrl = Application.absoluteURL(routes.Account.showActivateForm(newUser.email, newUser.getActivationUid()).absoluteURL(request()));
@@ -784,46 +782,9 @@ public class Administrator extends Controller {
 	}
 
 	public static Cancellable shuttingDown = null;
-	public static Cancellable shutdownProgramatically(int delay) {
-
-		// Shutdown only allowed in desktop mode
-		if (!"desktop".equals(Application.deployment()))
-			return null;
-
-		if (shuttingDown != null)
-			return shuttingDown;
-
-		Logger.debug("shutting down programatically in "+delay+" seconds");
-		shuttingDown = Akka.system().scheduler().scheduleOnce(
-				Duration.create(delay, TimeUnit.SECONDS),
-				new Runnable() {
-					public void run() {
-						try {
-							// Pipeline engine
-							Logger.info("Attempting to stop the Pipeline engine...");
-							Pipeline2Engine.shutdown();
-
-							// Web UI
-							System.exit(0);
-						} catch (javax.persistence.PersistenceException e) {
-							// Ignores this exception that happens on shutdown:
-							// javax.persistence.PersistenceException: java.sql.SQLException: Attempting to obtain a connection from a pool that has already been shutdown.
-							// Should be safe to ignore I think...
-						}
-					}
-				},
-				Akka.system().dispatcher()
-				);
-		return shuttingDown;
-	}
-
 	public static Result shutdown() {
-		Cancellable cancellable = shutdownProgramatically(5);
-		if (cancellable == null)
-			Results.forbidden();
-
-		flash("shutdown","true");
-		return ok(views.html.Administrator.goodbye.render());
+		// TODO: remnant from desktop mode, remove this function
+		return Results.forbidden();
 	}
 
 	/**

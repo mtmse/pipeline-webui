@@ -104,7 +104,7 @@ public class Account extends Controller {
         		user.email = filledForm.field("email").valueOr("");
         	if (changedPassword)
         		user.setPassword(filledForm.field("newPassword").valueOr(""));
-        	user.save(Application.datasource);
+        	user.save();
         	user.login(session());
         	flash("success", "Your changes were saved successfully!");
         	return redirect(routes.Account.overview());
@@ -174,7 +174,7 @@ public class Account extends Controller {
         	user.setPassword(filledForm.field("password").valueOr(""));
         	user.active = true;
         	user.passwordLinkSent = null;
-        	user.save(Application.datasource);
+        	user.save();
         	user.login(session());
         	return redirect(routes.Application.index());
         }

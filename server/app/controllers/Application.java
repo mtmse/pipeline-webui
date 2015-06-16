@@ -7,13 +7,14 @@ import java.io.IOException;
 
 import org.daisy.pipeline.client.models.Alive;
 
+import controllers.Assets.Asset;
 import models.Notification;
 import models.NotificationConnection;
 import models.Setting;
 import models.User;
-import play.Configuration;
-import play.Logger;
+import play.*;
 import play.mvc.*;
+import views.html.*;
 import utils.Pipeline2Engine;
 
 public class Application extends Controller {
@@ -74,10 +75,17 @@ public class Application extends Controller {
 		DP2DATA = dp2data;
 	}
 	
-	public static final String datasource = Configuration.root().getString("dp2.datasource");
-	private static Alive alive = null;
+	private static org.daisy.pipeline.client.models.Alive alive = null;
 	
-	public static final String version = Configuration.root().getString("version");
+	public static final String version;
+	static {
+		 String v = Application.class.getPackage().getImplementationVersion();
+		 if (v == null)
+			 version = "dev";
+		 else
+			 version = v;
+		 assert !(Play.isProd() && "dev".equals(version));
+	}
 	
 	public static Result index() {
 		if (FirstUse.isFirstUse())
@@ -115,7 +123,7 @@ public class Application extends Controller {
 	
 	public static Result theme(String filename) {
 		if ("".equals(themeName())) {
-			return redirect(routes.Assets.at(filename));
+			return redirect(routes.Assets.versioned(new Asset(filename)));
 			
 		} else {
 			String theme = Application.themeName();
@@ -137,10 +145,10 @@ public class Application extends Controller {
 					
 				} catch (FileNotFoundException e) {
 					Logger.error("Could not open file input stream for '"+filename+"' in theme '"+theme+"'.", e);
-					return redirect(routes.Assets.at(filename));
+					return redirect(routes.Assets.versioned(new Asset(filename)));
 				}
 			} else {
-				return redirect(routes.Assets.at(filename));
+				return redirect(routes.Assets.versioned(new Asset(filename)));
 			}
 		}
 	}
@@ -179,6 +187,7 @@ public class Application extends Controller {
 	 * @return
 	 */
 	public static String deployment() {
+		// TODO: remove this method as it relates to desktop mode only
 		return deployment != null ? deployment : Setting.get("deployment");
 	}
 	
@@ -212,11 +221,11 @@ public class Application extends Controller {
 		return Pipeline2Engine.State.RUNNING+"";
 	}
 	
-	public static Alive getAlive() {
+	public static org.daisy.pipeline.client.models.Alive getAlive() {
 		return alive;
 	}
 	
-	public static void setAlive(Alive alive) {
+	public static void setAlive(org.daisy.pipeline.client.models.Alive alive) {
 		Application.alive = alive;
 		NotificationConnection.pushAll(new Notification("dp2.engine", alive));
 	}

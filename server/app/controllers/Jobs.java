@@ -26,7 +26,8 @@ import models.Upload;
 import models.User;
 import models.UserSetting;
 
-import org.codehaus.jackson.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.daisy.pipeline.client.Pipeline2WS;
 import org.daisy.pipeline.client.Pipeline2WSException;
 import org.daisy.pipeline.client.Pipeline2WSResponse;
@@ -382,11 +383,11 @@ public class Jobs extends Controller {
 
 		// Get a description of the script from Pipeline 2 Web API
 		Pipeline2WSResponse scriptResponse;
-		Script script;
+		org.daisy.pipeline.client.models.Script script;
 		try {
 			scriptResponse = org.daisy.pipeline.client.Scripts.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id);
 			if (scriptResponse.status != 200) { return Application.error(scriptResponse.status, scriptResponse.statusName, scriptResponse.statusDescription, scriptResponse.asText()); }
-			script = new Script(scriptResponse);
+			script = new org.daisy.pipeline.client.models.Script(scriptResponse);
 			
 		} catch (Pipeline2WSException e) {
 			Logger.error(e.getMessage(), e);
@@ -542,12 +543,12 @@ public class Jobs extends Controller {
 			if (filenames.length() > 0)
 				webUiJob.nicename = filenames;
 		}
-		webUiJob.save(Application.datasource);
+		webUiJob.save();
 		NotificationConnection.push(webUiJob.user, new Notification("job-created-"+webUiJob.id, webUiJob.created.toString()));
 		for (Long uploadId : scriptForm.uploads.keySet()) {
 			// associate uploads with job
 			scriptForm.uploads.get(uploadId).job = jobId;
-			scriptForm.uploads.get(uploadId).save(Application.datasource);
+			scriptForm.uploads.get(uploadId).save();
 		}
 		
 		webUiJob.status = "IDLE";
@@ -575,7 +576,7 @@ public class Jobs extends Controller {
     	Job job = Job.findById(jobId);
     	if (job != null) {
     		Logger.debug("deleting "+jobId);
-    		job.delete(Application.datasource);
+    		job.delete();
     		return ok();
     	} else {
     		Logger.debug("no such job: "+jobId);

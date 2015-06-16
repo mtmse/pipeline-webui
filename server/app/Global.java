@@ -11,9 +11,9 @@ import org.daisy.pipeline.client.Pipeline2WS;
 import org.daisy.pipeline.client.Pipeline2WSException;
 import org.daisy.pipeline.client.Pipeline2WSResponse;
 import org.daisy.pipeline.client.Pipeline2WSLogger;
+
 import controllers.Administrator;
 import controllers.FirstUse;
-
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
 import utils.Pipeline2Engine;
@@ -29,8 +29,6 @@ public class Global extends GlobalSettings {
 	@Override
 	public synchronized void onStart(play.Application app) {
 		// Application has started...
-		
-		final String datasource = Configuration.root().getString("dp2.datasource");
 		
 		Pipeline2WS.setLoggerImplementation(new Pipeline2PlayLogger());
 		if ("DEBUG".equals(Configuration.root().getString("logger.application"))) {
@@ -129,31 +127,6 @@ public class Global extends GlobalSettings {
 				Duration.create(1, TimeUnit.SECONDS),
 				new Runnable() {
 					public void run() {
-						if ("desktop".equals(controllers.Application.deployment())) {
-							if (Administrator.shuttingDown == null && (utils.Pipeline2Engine.State.ERROR+"").equals(controllers.Application.getPipeline2EngineState())) {
-								Administrator.shutdownProgramatically(30);
-							}
-							
-							// When starting the engine; check more often whether it is alive
-							if (Administrator.shuttingDown == null && Pipeline2Engine.getState() != Pipeline2Engine.State.RUNNING && Setting.get("dp2ws.endpoint") != null) {
-								Pipeline2WSResponse response;
-								try {
-									response = org.daisy.pipeline.client.Alive.get(Setting.get("dp2ws.endpoint"));
-									if (response.status != 200) {
-										controllers.Application.setAlive(null);
-
-									} else {
-										controllers.Application.setAlive(new org.daisy.pipeline.client.models.Alive(response));
-										if ("desktop".equals(controllers.Application.deployment()))
-											Pipeline2Engine.setState(Pipeline2Engine.State.RUNNING);
-									}
-								} catch (Pipeline2WSException e) {
-									Logger.error(e.getMessage(), e);
-									controllers.Application.setAlive(null);
-								}
-							}
-						}
-						
 						try {
 							synchronized (NotificationConnection.notificationConnections) {
 								for (Long userId : NotificationConnection.notificationConnections.keySet()) {
@@ -200,7 +173,7 @@ public class Global extends GlobalSettings {
 							for (Upload upload : uploads) {
 								if (upload.job == null && NotificationConnection.getBrowser(upload.browserId) == null && upload.uploaded.before(timeoutDate)) {
 									Logger.info("Deleting old upload that is not open in any browser window: "+upload.id+(upload.getFile()!=null?" ("+upload.getFile().getName()+")":""));
-									upload.delete(datasource);
+									upload.delete();
 								}
 							}
 							
@@ -214,7 +187,7 @@ public class Global extends GlobalSettings {
 							for (Job job : jobs) {
 								if (job.finished != null && job.finished.before(timeoutDate)) {
 									Logger.info("Deleting old job: "+job.id+" ("+job.nicename+")");
-									job.delete(datasource);
+									job.delete();
 								}
 							}
 						} catch (javax.persistence.PersistenceException e) {
@@ -261,7 +234,7 @@ public class Global extends GlobalSettings {
 								}
 								if (!exists) {
 									Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
-									webUiJob.delete(datasource);
+									webUiJob.delete();
 								}
 							}
 							
@@ -277,7 +250,7 @@ public class Global extends GlobalSettings {
 									if (!exists) {
 										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+fwkJob.id);
 										Job webUiJob = new Job(fwkJob);
-										webUiJob.save(datasource);
+										webUiJob.save();
 									}
 								}
 							}
@@ -290,15 +263,6 @@ public class Global extends GlobalSettings {
 				},
 				Akka.system().dispatcher()
 			);
-	}
-	
-	@Override
-	public void onStop(play.Application app) {
-		// Application shutdown...
-		
-		// Halt the Pipeline 2 engine if running in desktop mode
-		if ("desktop".equals(controllers.Application.deployment()))
-			Pipeline2Engine.halt();
 	}
 
 }

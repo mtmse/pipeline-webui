@@ -1,7 +1,9 @@
 package models;
 
 import play.Logger;
-import play.db.ebean.*;
+
+import com.avaje.ebean.*;
+
 import play.mvc.Http.MultipartFormData.FilePart;
 import utils.ContentType;
 import utils.FileInfo;
@@ -20,8 +22,6 @@ import java.util.*;
 @Entity
 public class Upload extends Model {
 	
-	private static final long serialVersionUID = 1L;
-
 	@Id
 	public Long id;
 	
@@ -47,7 +47,7 @@ public class Upload extends Model {
 		Upload u = new Upload();
 		u.browserId = browserId;
 		u.user = user.id;
-		u.save(Application.datasource); // saving here generates the unique id for this upload
+		u.save(); // saving here generates the unique id for this upload
 		
 		File uploadDir = new File(Setting.get("uploads")+u.id);
 		uploadDir.mkdirs();
@@ -74,7 +74,7 @@ public class Upload extends Model {
 				u.contentType = "application/zip";
 		}
 		
-		u.save(Application.datasource);
+		u.save();
 		
 		return u.id;
 	}
@@ -128,7 +128,7 @@ public class Upload extends Model {
 	
 	// -- Queries
 	
-	public static Finder<Long,Upload> find = new Finder<Long,Upload>(Application.datasource, Long.class, Upload.class);
+	public static Finder<Long,Upload> find = new Finder<Long,Upload>(Upload.class);
 	
 	/** Retrieve a Upload by its id. */
     public static Upload findById(Long id) {
@@ -136,18 +136,18 @@ public class Upload extends Model {
     }
     
     @Override
-    public void delete(String datasource) {
+    public void delete() {
     	File file = getFile();
     	if (file != null && file.exists())
     		file.delete();
-    	super.delete(datasource);
+    	super.delete();
     }
-    
+	
     @Override
-	public void save(String datasource) {
+	public void save() {
 		String absolutePath = this.absolutePath;
 		this.absolutePath = "" + tempIdGenerator.nextLong();
-		super.save(datasource);
+		super.save();
 		
 		// refresh id after save
 		if (this.id == null) {
@@ -160,6 +160,6 @@ public class Upload extends Model {
 		
 		// absolutePath used to store temporary id
 		this.absolutePath = absolutePath;
-		super.save(datasource);
+		super.save();
 	}
 }

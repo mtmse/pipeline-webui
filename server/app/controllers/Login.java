@@ -89,7 +89,7 @@ public class Login extends Controller {
     		
     	} else {
     		user.makeNewActivationUid();
-    		user.save(Application.datasource);
+    		user.save();
 			String resetUrl = Application.absoluteURL(routes.Account.showResetPasswordForm(user.email, user.getActivationUid()).absoluteURL(request()));
 			String html = views.html.Account.emailResetPassword.render(resetUrl).body();
 			String text = "Go to this link to change your password: "+resetUrl;

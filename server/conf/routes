@@ -58,7 +58,6 @@ POST	/account                            controllers.Account.changeDetails()
 # Administrator
 GET		/admin                              controllers.Administrator.getSettings()
 POST	/admin                              controllers.Administrator.postSettings()
-GET		/admin/shutdown                     controllers.Administrator.shutdown()
 GET 	/admin/POST                         controllers.Administrator.getPostSettings()
 
 # First use
@@ -67,7 +66,7 @@ POST    /firstuse                           controllers.FirstUse.postFirstUse()
 GET		/welcome							controllers.FirstUse.welcome()
 
 # Map static resources from the /public folder to the /assets URL path
-GET     /assets/*file                       controllers.Assets.at(path="/public", file)
+GET     /assets/*file                       controllers.Assets.versioned(path="/public", file: Asset)
 
 # Application
 GET     /alive                              controllers.SystemStatus.alive()

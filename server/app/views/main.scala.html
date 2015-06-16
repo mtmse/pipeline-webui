@@ -1,4 +1,4 @@
-@(title: String, nav: String = "", moreScripts: Array[String] = Array(), moreStyles: Array[String] = Array(), navs: Array[String] = Array("scripts", "jobs", "about", "admin", "account", "login", "shutdown"))(content: Html)
+@(title: String, nav: String = "", moreScripts: Array[String] = Array(), moreStyles: Array[String] = Array(), navs: Array[String] = Array("scripts", "jobs", "about", "admin", "account", "login"))(content: Html)
 
 <!DOCTYPE html>
 <html lang="en">
@@ -24,7 +24,7 @@
 	@for(style <- moreStyles) {
 		<link href="@routes.Application.theme("stylesheets/"+style)?@Application.themeName()&version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" rel="stylesheet" type="text/css"/>
 	}
-	<link href="@routes.Assets.at("stylesheets/main.min.css")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" rel="stylesheet" type="text/css"/>
+	<link href="@routes.Assets.versioned("stylesheets/main.css")" rel="stylesheet" type="text/css">
 	@if(controllers.Application.themeName()!=""){
 		<link href="@routes.Application.theme("stylesheets/main.css")?@Application.themeName()&version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" rel="stylesheet" type="text/css"/>
 	}
@@ -39,21 +39,21 @@
 	<![endif]-->
 
 	<!-- Icons -->
-	<link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")"/>
-	<!--<link rel="apple-touch-icon" href="routes.Assets.at("images/apple-touch-icon.png")"/>
-	<link rel="apple-touch-icon" sizes="72x72" href="routes.Assets.at("images/apple-touch-icon-72x72.png")"/>
-	<link rel="apple-touch-icon" sizes="114x114" href="routes.Assets.at("images/apple-touch-icon-114x114.png")"/>-->
+	<link rel="shortcut icon" type="image/png" href="@routes.Assets.versioned("images/favicon.png")"/>
+	<!--<link rel="apple-touch-icon" href="routes.Assets.versioned("images/apple-touch-icon.png")"/>
+	<link rel="apple-touch-icon" sizes="72x72" href="routes.Assets.versioned("images/apple-touch-icon-72x72.png")"/>
+	<link rel="apple-touch-icon" sizes="114x114" href="routes.Assets.versioned("images/apple-touch-icon-114x114.png")"/>-->
 	
 	<!-- Load jQuery before the content (so other templates may use jQuery) -->
-	<script type="text/javascript" src="@routes.Assets.at("javascripts/jquery-1.9.1.min.js")"></script>
+	<script type="text/javascript" src="@routes.Assets.versioned("javascripts/jquery-1.9.1.min.js")"></script>
 	@if(play.Play.application().isDev()){
-		<script type="text/javascript" src="@routes.Assets.at("javascripts/jquery-migrate-1.1.1.min.js")"></script>
+		<script type="text/javascript" src="@routes.Assets.versioned("javascripts/jquery-migrate-1.1.1.min.js")"></script>
 		<!--[if lt IE 9]>
 			<script type="text/javascript" src="http://fbug.googlecode.com/svn/lite/branches/firebug1.4/content/firebug-lite-dev.js"></script>
 		<![endif]-->
 	}else{
 		<!--[if lt IE 9]>
-		  <script type="text/javascript" src="@routes.Assets.at("javascripts/jquery-migrate-1.1.1.min.js")"></script>
+		  <script type="text/javascript" src="@routes.Assets.versioned("javascripts/jquery-migrate-1.1.1.min.js")"></script>
 		<![endif]-->
 	}
 	
@@ -85,11 +85,7 @@
 	                <span class="icon-bar"></span>
 	                <span class="icon-bar"></span>
 	            </a>
-                @if(Controller.flash("shutdown")=="true" || models.Setting.get("appearance.titleLink")==""){
-	            	<span class="brand">@Setting.get("appearance.title")</span>
-	            }else{
-	   				<a class="brand" href="@Application.titleLink()" @if(models.Setting.get("appearance.titleLink.newWindow")=="true"){target="_blank"}>@Setting.get("appearance.title")</a>
-	   			}
+               	<a class="brand" href="@Application.titleLink()" @if(models.Setting.get("appearance.titleLink.newWindow")=="true"){target="_blank"}>@Setting.get("appearance.title")</a>
 	   			<nav class="nav-collapse">
 		   			<ul class="nav">
 		   				@if(models.User.parseUserId(session()) != null){
@@ -134,11 +130,6 @@
 		 						}
 	  						</li>
 	  					}
-	  					@if(navs.contains("shutdown") && controllers.Application.deployment()=="desktop"){
-	  						<li class="@("active".when(nav == "shutdown"))">
-	  							<a href="@routes.Administrator.shutdown()"><i class="icon-remove icon-white"></i> Shut down</a>
-	  						</li>
-	  					}
 	  				</ul>
 				</nav>
 			</div>
@@ -152,19 +143,19 @@
 	</div>
 	
 	<!-- Scripts -->
-	<script src="@routes.Assets.at("javascripts/jquery-ui-1.9.2.custom.min.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/bootstrap.min.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/json2.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/main.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/formUtils.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/notifications.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
-	<script src="@routes.Assets.at("javascripts/fuzzyDates.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/jquery-ui-1.9.2.custom.min.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/bootstrap.min.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/json2.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/main.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/formUtils.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/notifications.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+	<script src="@routes.Assets.versioned("javascripts/fuzzyDates.js")?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
 	@for(script <- moreScripts) {
-		<script src="@routes.Assets.at("javascripts/"+script)?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
+		<script src="@routes.Assets.versioned("javascripts/"+script)?version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
 	}
 	<script src="@routes.Application.theme("javascripts/theme.js")?@Application.themeName()&version=@Application.version@if(play.Play.application().isDev()){-@(new Date().getTime())}" type="text/javascript"></script>
 	<script type="text/javascript">
-/*@@cc_on
+/*@@@@cc_on
 (function(f){window.setTimeout=f(window.setTimeout);window.setInterval=f(window.setInterval);})(function(f){return function(c,t){var a=[].slice.call(arguments,2);return f(function(){c.apply(this,a);},t);};});
 @@*/
 	</script>

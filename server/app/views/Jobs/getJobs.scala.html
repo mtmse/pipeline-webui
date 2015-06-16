@@ -32,7 +32,7 @@
 <table id="joblist" class="table joblist" style="display:none;">
 	<thead>
 		<tr id="joblist-headline">
-			<th><img src="@routes.Assets.at("images/icon-info-sign.png")" alt="Status" title="Status"/></th>
+			<th><img src="@routes.Assets.versioned("images/icon-info-sign.png")" alt="Status" title="Status"/></th>
 			<th>Job</th>
 			<!--<th>Results</th>-->
 			<th>Created</th>
@@ -54,7 +54,7 @@ addJob = function(job) {
 	console.log(visible, $("#showAllJobs").hasClass("active"),' || ',"@Controller.flash("userid")" === ""+job.user);
 	html = '<tr id="job-'+job.id+'" class="job" data-user="'+job.user+'"'+(!visible?' style="display:none;"':'')+'>'+"\n";
 	html += '    <td id="job-status-'+job.id+'">'+"\n";
-	html += '        <img src="@routes.Assets.at("images/")'+job.status+'.png" alt="'+statusText+'" title="'+statusText+'"/>'+"\n";
+	html += '        <img src="@routes.Assets.versioned("images/")'+job.status+'.png" alt="'+statusText+'" title="'+statusText+'"/>'+"\n";
 	html += '    </td>'+"\n";
 	html += '    <td>'+"\n";
 	html += '        <a href="@routes.Jobs.getJob("")'+job.id+'">'+"\n";
@@ -124,7 +124,7 @@ addJob = function(job) {
 	
 	Notifications.listen("job-status-"+job.id, function(status, id){
 		var statusText = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-		$("#job-status-"+id).html('<img src="@routes.Assets.at("images/")'+status+'.png" alt="'+statusText+'" title="'+statusText+'"/>');
+		$("#job-status-"+id).html('<img src="@routes.Assets.versioned("images/")'+status+'.png" alt="'+statusText+'" title="'+statusText+'"/>');
 		/*if (status==="DONE" || status==="VALIDATION_FAIL") {
 			//$("#job-results-"+id).html(' <span><a class="btn btn-mini btn-success" href="'+'@routes.Jobs.getResult("JOBID","")'.replace('JOBID',id)+'"><i class="icon-download-alt icon-white"></i> Download</a></span>');
 			$("#job-results-"+id).html(' <span><a class="btn btn-mini btn-success" href="#"><i class="icon-download-alt icon-white"></i> Download</a></span>');

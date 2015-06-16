@@ -8,7 +8,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import play.Logger;
-import play.db.ebean.*;
+
+import com.avaje.ebean.*;
 
 import javax.persistence.*;
 
@@ -19,7 +20,6 @@ import org.daisy.pipeline.client.models.job.Message;
 import org.w3c.dom.Document;
 
 import controllers.Application;
-
 import akka.actor.Cancellable;
 import play.data.validation.*;
 import play.libs.Akka;
@@ -108,7 +108,7 @@ public class Job extends Model implements Comparable<Job> {
 
 	// -- Queries
 
-	public static Model.Finder<String,Job> find = new Model.Finder<String, Job>(Application.datasource, String.class, Job.class);
+	public static Model.Finder<String,Job> find = new Model.Finder<String, Job>(Job.class);
 
 	/** Retrieve a Job by its id. */
 	public static Job findById(String id) {
@@ -171,7 +171,7 @@ public class Job extends Model implements Comparable<Job> {
 								if (webUiJob.finished == null) {
 									// pushNotifier tends to fire multiple times after canceling it, so this if{} is just to fire the "finished" event exactly once
 									webUiJob.finished = new Date();
-									webUiJob.save(Application.datasource);
+									webUiJob.save();
 									Map<String,String> finishedMap = new HashMap<String,String>();
 									finishedMap.put("text", webUiJob.finished.toString());
 									finishedMap.put("number", webUiJob.finished.getTime()+"");
@@ -196,7 +196,7 @@ public class Job extends Model implements Comparable<Job> {
 									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+job.id, startedMap));
 								}
 								
-								webUiJob.save(Application.datasource);
+								webUiJob.save();
 							}
 							
 							try {
@@ -232,7 +232,7 @@ public class Job extends Model implements Comparable<Job> {
 	}
 	
 	@Override
-	public void delete(String datasource) {
+	public void delete() {
 		Logger.debug("deleting "+this.id+" (sending DELETE request)");
 		try {
 			org.daisy.pipeline.client.Jobs.delete(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), this.id);
@@ -241,7 +241,7 @@ public class Job extends Model implements Comparable<Job> {
 		}
 		List<Upload> uploads = getUploads();
 		for (Upload upload : uploads)
-			upload.delete(datasource);
-		super.delete(datasource);
+			upload.delete();
+		super.delete();
 	}
 }

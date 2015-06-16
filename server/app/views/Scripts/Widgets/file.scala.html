@@ -19,8 +19,8 @@
 								</select>
 							</div>
 							<div style="display:table-cell;vertical-align:middle;min-width:40px;">
-								<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-add" class="btn" title="Add"><img src="@routes.Assets.at("images/glyphicons/glyphicons_211_right_arrow.png")" alt="Add"/></button><br/>
-								<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-remove" class="btn" title="Remove"><img src="@routes.Assets.at("images/glyphicons/glyphicons_210_left_arrow.png")" alt="Remove"/></button>
+								<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-add" class="btn" title="Add"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_211_right_arrow.png")" alt="Add"/></button><br/>
+								<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-remove" class="btn" title="Remove"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_210_left_arrow.png")" alt="Remove"/></button>
 							</div>
 						</div>
 					</div>
@@ -37,8 +37,8 @@
 							</div>
 							<div style="display:table-cell;vertical-align:middle;min-width:40px;">
 								@if(arg.ordered==Boolean.TRUE){
-									<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-up" class="btn" title="Move up"><img src="@routes.Assets.at("images/glyphicons/glyphicons_213_up_arrow.png")" alt="Move up"/></button><br/>
-									<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-down" class="btn" title="Move down"><img src="@routes.Assets.at("images/glyphicons/glyphicons_212_down_arrow.png")" alt="Move down"/></button>
+									<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-up" class="btn" title="Move up"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_213_up_arrow.png")" alt="Move up"/></button><br/>
+									<button type="button" id="script-@scriptId-@{arg.kind}-@{arg.name}-down" class="btn" title="Move down"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_212_down_arrow.png")" alt="Move down"/></button>
 								}
 							</div>
 						</div>
