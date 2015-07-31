@@ -29,7 +29,7 @@ public class Log extends Controller {
 	 * Returns an exhaustive plaintext log
 	 * @return
 	 */
-	public static Result getLog(Integer shutdown) {
+	public static Result getLog() {
 		if (FirstUse.isFirstUse())
 			return redirect(routes.FirstUse.getFirstUse());
 		
@@ -38,13 +38,7 @@ public class Log extends Controller {
 			return redirect(routes.Login.login());
 		
 		Result result = ok(logText("Pipeline 2 Web UI Log", null));
-		
-		if (shutdown == 1) {
-			if (Administrator.shuttingDown != null)
-				Administrator.shuttingDown.cancel();
-			Administrator.shuttingDown = null;
-		}
-		
+				
 		return result;
 	}
 	
@@ -108,98 +102,90 @@ public class Log extends Controller {
 		}
 		
 		// Pipeline 2 Engine logs
-		if ("server".equals(Application.deployment())) {
-			// if engine directory specified: retrieve engine logs manually
-			if (Setting.get("dp2.engineDir") != null) {
-//				File engineDir = new File(Setting.get("dp2.engineDir"));
-				
-				{
-					List<String> daisyPipelineLog = new ArrayList<String>();
-					File daisyPipelineLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"daisy-pipeline.log");
-					try {
-						FileInputStream stream = new FileInputStream(daisyPipelineLogFile);
-						try {
-							FileChannel fc = stream.getChannel();
-							MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-							/* Instead of using default, pass in a decoder. */
-							daisyPipelineLog.add(Charset.defaultCharset().decode(bb).toString());
-						}
-						finally {
-							stream.close();
-						}
-					} catch (IOException e) {
-						daisyPipelineLog.add("An error occured while trying to read "+daisyPipelineLogFile.getAbsolutePath());
-						StringWriter sw = new StringWriter();
-			            PrintWriter pw = new PrintWriter(sw);
-			            e.printStackTrace(pw);
-			            daisyPipelineLog.add(sw.toString()); // stack trace as a string
-					}
-					Map<String,List<String>> log = new HashMap<String,List<String>>();
-					log.put("Pipeline 2 Engine - daisy-pipeline.log", daisyPipelineLog);
-					logs.add(log);
-				}
-				
-				{
-					List<String> derbyLog = new ArrayList<String>();
-					File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"derby.log");
-					if (derbyLogFile.exists()) {
-						try {
-							FileInputStream stream = new FileInputStream(derbyLogFile);
-							try {
-								FileChannel fc = stream.getChannel();
-								MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-								/* Instead of using default, pass in a decoder. */
-								derbyLog.add(Charset.defaultCharset().decode(bb).toString());
-							}
-							finally {
-								stream.close();
-							}
-						} catch (IOException e) {
-							derbyLog.add("An error occured while trying to read "+derbyLogFile.getAbsolutePath());
-							StringWriter sw = new StringWriter();
-				            PrintWriter pw = new PrintWriter(sw);
-				            e.printStackTrace(pw);
-				            derbyLog.add(sw.toString()); // stack trace as a string
-						}
-					} else {
-						derbyLog.add("There is no Derby log file at: "+derbyLogFile.getAbsolutePath());
-						derbyLog.add("This probably means that you use a MySQL database instead.");
-					}
-					Map<String,List<String>> log = new HashMap<String,List<String>>();
-					log.put("Pipeline 2 Engine - derby.log", derbyLog);
-					logs.add(log);
-				}
-				
-			} else {
-				// TODO: try to get error log through WS ?
-			}
-		}
-		
-		// if using Derby: derby.log
-		File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"webui-database.log");
-		if (derbyLogFile.exists()) {
-			List<String> derbyLog = new ArrayList<String>();
+		{
+			List<String> daisyPipelineLog = new ArrayList<String>();
+			File daisyPipelineLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"daisy-pipeline.log");
 			try {
-				FileInputStream stream = new FileInputStream(derbyLogFile);
+				FileInputStream stream = new FileInputStream(daisyPipelineLogFile);
 				try {
 					FileChannel fc = stream.getChannel();
 					MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
 					/* Instead of using default, pass in a decoder. */
-					derbyLog.add(Charset.defaultCharset().decode(bb).toString());
+					daisyPipelineLog.add(Charset.defaultCharset().decode(bb).toString());
 				}
 				finally {
 					stream.close();
 				}
 			} catch (IOException e) {
-				derbyLog.add("An error occured while trying to read "+derbyLogFile.getAbsolutePath());
+				daisyPipelineLog.add("An error occured while trying to read "+daisyPipelineLogFile.getAbsolutePath());
 				StringWriter sw = new StringWriter();
 	            PrintWriter pw = new PrintWriter(sw);
 	            e.printStackTrace(pw);
-	            derbyLog.add(sw.toString()); // stack trace as a string
+	            daisyPipelineLog.add(sw.toString()); // stack trace as a string
 			}
 			Map<String,List<String>> log = new HashMap<String,List<String>>();
-			log.put("Pipeline 2 Web UI - derby.log", derbyLog);
+			log.put("Pipeline 2 Engine - daisy-pipeline.log", daisyPipelineLog);
 			logs.add(log);
+		}
+		
+		{
+			List<String> derbyLog = new ArrayList<String>();
+			File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"derby.log");
+			if (derbyLogFile.exists()) {
+				try {
+					FileInputStream stream = new FileInputStream(derbyLogFile);
+					try {
+						FileChannel fc = stream.getChannel();
+						MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+						/* Instead of using default, pass in a decoder. */
+						derbyLog.add(Charset.defaultCharset().decode(bb).toString());
+					}
+					finally {
+						stream.close();
+					}
+				} catch (IOException e) {
+					derbyLog.add("An error occured while trying to read "+derbyLogFile.getAbsolutePath());
+					StringWriter sw = new StringWriter();
+		            PrintWriter pw = new PrintWriter(sw);
+		            e.printStackTrace(pw);
+		            derbyLog.add(sw.toString()); // stack trace as a string
+				}
+			} else {
+				derbyLog.add("There is no Derby log file at: "+derbyLogFile.getAbsolutePath());
+				derbyLog.add("This probably means that you use a MySQL database instead.");
+			}
+			Map<String,List<String>> log = new HashMap<String,List<String>>();
+			log.put("Pipeline 2 Engine - derby.log", derbyLog);
+			logs.add(log);
+		}
+		
+		// if Web UI is using Derby, get derby log file
+		{
+			File derbyLogFile = new File(controllers.Application.DP2DATA+controllers.Application.SLASH+"log"+controllers.Application.SLASH+"webui-database.log");
+			if (derbyLogFile.exists()) {
+				List<String> derbyLog = new ArrayList<String>();
+				try {
+					FileInputStream stream = new FileInputStream(derbyLogFile);
+					try {
+						FileChannel fc = stream.getChannel();
+						MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+						/* Instead of using default, pass in a decoder. */
+						derbyLog.add(Charset.defaultCharset().decode(bb).toString());
+					}
+					finally {
+						stream.close();
+					}
+				} catch (IOException e) {
+					derbyLog.add("An error occured while trying to read "+derbyLogFile.getAbsolutePath());
+					StringWriter sw = new StringWriter();
+		            PrintWriter pw = new PrintWriter(sw);
+		            e.printStackTrace(pw);
+		            derbyLog.add(sw.toString()); // stack trace as a string
+				}
+				Map<String,List<String>> log = new HashMap<String,List<String>>();
+				log.put("Pipeline 2 Web UI - webui-database.log", derbyLog);
+				logs.add(log);
+			}
 		}
 		
 		// Compile plaintext log

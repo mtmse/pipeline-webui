@@ -56,7 +56,7 @@ public class Jobs extends Controller {
 			return redirect(routes.Login.login());
 
 		User.flashBrowserId(user);
-		return ok(views.html.Jobs.newJob.render(Application.getPipeline2EngineState()));
+		return ok(views.html.Jobs.newJob.render(Application.pipeline2EngineAvailable()));
 	}
 	
 	public static Result getJobs() {

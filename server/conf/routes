@@ -74,5 +74,5 @@ GET     /status                             controllers.SystemStatus.status()
 GET     /status/engine                      controllers.SystemStatus.engineStatus()
 
 # Log
-GET		/log								controllers.Log.getLog(shutdown: java.lang.Integer ?= 0)
+GET		/log								controllers.Log.getLog()
 

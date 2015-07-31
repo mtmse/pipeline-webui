@@ -8,7 +8,6 @@ import play.mvc.*;
 import play.data.*;
 import play.Logger;
 import utils.FormHelper;
-import utils.Pipeline2Engine;
 import models.*;
 
 /**
@@ -83,29 +82,6 @@ public class FirstUse extends Controller {
 		Map<String, String[]> form = request().body().asFormUrlEncoded();
 		
 		String formName = form.containsKey("formName") ? form.get("formName")[0] : "";
-		
-		if ("setDeployment".equals(formName)) {
-			if (!isFirstUse())
-				return redirect(routes.FirstUse.getFirstUse());
-			
-			Form<Administrator.SetDeploymentForm> filledForm = play.data.Form.form(Administrator.SetDeploymentForm.class).bindFromRequest();
-			Administrator.SetDeploymentForm.validate(filledForm);
-			
-			if (query.containsKey("validate")) {
-				User.flashBrowserId(null);
-				return ok(FormHelper.asJson(filledForm));
-			
-			} else if (filledForm.hasErrors()) {
-				User.flashBrowserId(null);
-				return badRequest(views.html.FirstUse.setDeployment.render(filledForm));
-			
-			} else {
-				String deployment = filledForm.field("deployment").valueOr("unknown");
-				Setting.set("deployment", deployment);
-				
-				return redirect(routes.FirstUse.getFirstUse());
-			}
-		}
 		
 		if ("createAdmin".equals(formName)) {
 			if (!isFirstUse())
@@ -207,16 +183,4 @@ public class FirstUse extends Controller {
 		return uploads;
 	}
 	
-	public static void configureDesktopDefaults() {
-		// TODO: remove this function as it is desktop-specific
-		String uploads = defaultUploadsDir();
-		
-		Logger.info("Using as uploaded files directory: "+uploads);
-		
-		Setting.set("uploads", uploads);
-		
-		Setting.set("dp2ws.endpoint", controllers.Application.DEFAULT_DP2_ENDPOINT);
-		Setting.set("dp2ws.authid", "");
-		Setting.set("dp2ws.secret", "");
-	}
 }

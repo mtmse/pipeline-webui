@@ -1,4 +1,4 @@
-@(frameworkState: String)
+@(engineAvailable: Boolean)
 
 @main("Scripts", "scripts", 
 Array("jquery.ui.widget.js","jquery.iframe-transport.js","jquery.fileupload.js","jquery.fileupload-ui.js","createJob.js"),
@@ -40,7 +40,7 @@ h2 {
 				<img src="@routes.Assets.versioned("images/loading.gif")" alt="" style="margin:10px;"/><br/>
 				<span>Loading...</span>
 			</div>
-			<div class="RUNNING" style="display:none;">
+			<div class="AVAILABLE" style="display:none;">
 				<ul id="scriptList" class="unstyled oneOrMoreScripts scriptlist" style="display:none;"></ul>
 				<table id="scriptTable" class="table" style="display:none;">
 					<thead>
@@ -61,11 +61,7 @@ h2 {
 					<p>There are no scripts installed.</p>
 				</div>
 			</div>
-			<div role="alert" class="STARTING alert alert-info" style="text-align:center; display:none;">
-				<img src="@routes.Assets.versioned("images/loading.gif")" alt="" style="margin:10px;"/>
-				<p>Starting the Pipeline engine...</p>
-			</div>
-			<div class="STOPPED" style="display:none;">
+			<div class="UNAVAILABLE" style="display:none;">
 				<p style="text-align:center;">
 					<img src="@routes.Assets.versioned("images/loading.gif")" alt="" style="margin:10px;"/><br/>
 					<span>Attempting to connect to the framework...</span>
@@ -109,21 +105,16 @@ h2 {
 		    	activeHeader: "ui-icon-circle-arrow-s"
 		    }
 	    });
-		var updateState = function (state){
+		var updateState = function(engineAvailable) {
 			$(".INITIAL").hide();
-			if (state === "RUNNING") {
-				$(".STOPPED").hide();
-				$(".STARTING").hide();
-				$(".RUNNING").show();
-			} else if (state === "STARTING") {
-				$(".STOPPED").hide();
-				$(".STARTING").show();
-				$(".RUNNING").hide();
-			} else if (state === "STOPPED") {
-				$(".STOPPED").show();
-				$(".STARTING").hide();
-				$(".RUNNING").hide();
+			if (engineAvailable) {
+				$(".UNAVAILABLE").hide();
+				$(".AVAILABLE").show();
+			} else {
+				$(".UNAVAILABLE").show();
+				$(".AVAILABLE").hide();
 			}
+			console.log(engineAvailable);
 		}
 		Notifications.listen("heartbeat", updateState);
 		var scriptHrefBase = "@routes.Scripts.getScript("")";
@@ -135,9 +126,9 @@ h2 {
 				},
 				success: function(scripts, textStatus, jqXHR) {
 					$(".INITIAL").hide();
-					$(".STOPPED").hide();
+					$(".UNAVAILABLE").hide();
 					$(".STARTING").hide();
-					$(".RUNNING").show();
+					$(".AVAILABLE").show();
 					if (scripts.length === 0) {
 						$(".oneOrMoreScripts").hide();
 						$(".noScripts").show();
@@ -205,11 +196,11 @@ h2 {
 		}
 		setTimeout(function(){
 			// show spinning gif after one second of waiting
-			if (!$(".STOPPED, .STARTING, .RUNNING, .ERROR").is(":visible")) {
+			if (!$(".UNAVAILABLE, .STARTING, .AVAILABLE, .ERROR").is(":visible")) {
 				$(".INITIAL").show();
 			}
 		},1000);
-		updateState("@frameworkState");
+		updateState(@engineAvailable);
 		firstFileOrScriptChosen = function() {
 			$("#scriptCreationPathGroup").hide();
 			$("#scriptList").hide();

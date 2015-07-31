@@ -29,7 +29,6 @@ import play.libs.Json;
 import play.mvc.*;
 import scala.concurrent.duration.Duration;
 import utils.FormHelper;
-import utils.Pipeline2Engine;
 
 public class Administrator extends Controller {
 
@@ -44,19 +43,6 @@ public class Administrator extends Controller {
 		public Form<SetMaintenanceForm> setMaintenanceForm = Administrator.setMaintenanceForm;
 		public Form<ConfigureAppearanceForm> configureAppearanceForm = Administrator.configureAppearanceForm;
 		public Form<ConfigureScripts> scriptsForm = Administrator.scriptsForm;
-	}
-
-	public final static Form<SetDeploymentForm> setDeploymentForm = play.data.Form.form(SetDeploymentForm.class);
-	public static class SetDeploymentForm {
-		@Constraints.Required
-		@Formats.NonEmpty
-		public String deployment;
-
-		public static void validate(Form<SetDeploymentForm> filledForm) {
-			if (!"desktop".equals(filledForm.field("deployment").value()) &&
-					!"server".equals(filledForm.field("deployment").value()))
-				filledForm.reject("deployment", "You must choose whether you're using the Web UI on your own computer or on a server.");
-		}
 	}
 
 	public final static Form<CreateAdminForm> createAdminForm = play.data.Form.form(CreateAdminForm.class);
@@ -779,12 +765,6 @@ public class Administrator extends Controller {
 
 		flash("error", "Form not found. Submitted information ignored :(");
 		return redirect(routes.Administrator.getSettings());
-	}
-
-	public static Cancellable shuttingDown = null;
-	public static Result shutdown() {
-		// TODO: remnant from desktop mode, remove this function
-		return Results.forbidden();
 	}
 
 	/**

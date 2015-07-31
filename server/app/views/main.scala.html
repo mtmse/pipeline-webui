@@ -105,12 +105,10 @@
 		   			<ul class="nav pull-right">
 		   				@if(session.get("admin")=="true"){
 		   					@if(navs.contains("admin")){
-		 						<li class="@("active".when(nav == "admin"))"><a href="@routes.Administrator.getSettings()"><i class="icon-wrench icon-white"></i> 
-		 							@if(controllers.Application.deployment()=="desktop"){ Settings }else{ Admin settings }
-		 						</a></li>
+		 						<li class="@("active".when(nav == "admin"))"><a href="@routes.Administrator.getSettings()"><i class="icon-wrench icon-white"></i>Admin settings</a></li>
 		 					}
 		 				}
-		 				@if(controllers.Application.deployment()=="server" && models.User.parseUserId(session()) != null){
+		 				@if(models.User.parseUserId(session()) != null){
 	 						@if(navs.contains("account")){
 		 						@if(models.User.parseUserId(session()) >= 0){
 			 						<li class="@("active".when(nav == "account"))"><a href="@routes.Account.overview()"><i class="icon-user icon-white"></i> @session.get("name")</a></li>
@@ -121,7 +119,7 @@
 		 						}
 	 						}
 	 					}
-		 				@if(navs.contains("login") && controllers.Application.deployment()=="server"){
+		 				@if(navs.contains("login")){
 		 					<li class="@("active".when(nav == "login"))">
 		 						@if(session.get("email")==null || models.User.parseUserId(session()) != null && models.User.parseUserId(session()) < 0){
 		 							<a href="@routes.Login.login()"><i class="icon-lock icon-white"></i> Log in</a>

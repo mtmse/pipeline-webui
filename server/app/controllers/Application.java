@@ -15,7 +15,6 @@ import models.User;
 import play.*;
 import play.mvc.*;
 import views.html.*;
-import utils.Pipeline2Engine;
 
 public class Application extends Controller {
 	
@@ -181,16 +180,6 @@ public class Application extends Controller {
 		return titleLink;
 	}
 	
-	private static String deployment = null;
-	/**
-	 * Returns a buffered value of the deployment type instead of having to check the DB each time using Setting.get("deployment").
-	 * @return
-	 */
-	public static String deployment() {
-		// TODO: remove this method as it relates to desktop mode only
-		return deployment != null ? deployment : Setting.get("deployment");
-	}
-	
 	public static String absoluteURL(String url) {
 		String absoluteURL = Setting.get("absoluteURL"); // for instance "http://localhost:9000" (protocol+host)
 		if (absoluteURL == null) {
@@ -211,14 +200,8 @@ public class Application extends Controller {
 		}
 	}
 
-	public static String getPipeline2EngineState() {
-		if (Pipeline2Engine.getState() != null)
-			return Pipeline2Engine.getState()+"";
-		
-		if (Application.alive == null || Application.alive.error)
-			return Pipeline2Engine.State.STOPPED+"";
-		
-		return Pipeline2Engine.State.RUNNING+"";
+	public static boolean pipeline2EngineAvailable() {
+		return Application.alive != null && !Application.alive.error;
 	}
 	
 	public static org.daisy.pipeline.client.models.Alive getAlive() {

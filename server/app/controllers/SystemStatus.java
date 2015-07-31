@@ -40,8 +40,7 @@ public class SystemStatus extends Controller {
 	public static Map<String,Object> statusMap() {
 		Map<String,Object> status = new HashMap<String,Object>();
 		status.put("time", new Date());
-		status.put("deployment", Application.deployment());
-		status.put("engine.state", Application.getPipeline2EngineState());
+		status.put("engine.state", Application.pipeline2EngineAvailable());
 		status.put("engine", Application.getAlive());
 		status.put("theme", Application.themeName());
 		status.put("version", Application.version);

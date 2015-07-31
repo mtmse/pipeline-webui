@@ -16,7 +16,6 @@ import controllers.Administrator;
 import controllers.FirstUse;
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
-import utils.Pipeline2Engine;
 import utils.Pipeline2PlayLogger;
 
 public class Global extends GlobalSettings {
@@ -37,26 +36,6 @@ public class Global extends GlobalSettings {
 		}
 		
 		NotificationConnection.notificationConnections = new ConcurrentHashMap<Long,List<NotificationConnection>>();
-		
-		Logger.debug("deployment: "+controllers.Application.deployment());
-		if ("desktop".equals(controllers.Application.deployment())) {
-			// reconfigure fwk dir each time, in case the install dir has changed
-			Pipeline2Engine.cwd = new File(Configuration.root().getString("dp2engine.dir")).getAbsoluteFile();
-			Logger.info("STARTING....");
-			Pipeline2Engine.setState(Pipeline2Engine.State.STOPPED);
-			FirstUse.configureDesktopDefaults();
-			Akka.system().scheduler().scheduleOnce(Duration.create(0, TimeUnit.SECONDS),
-			 	new Runnable() {
-					public void run() {
-						Pipeline2Engine.start();
-					}
-				},
-				Akka.system().dispatcher()
-				);
-		}
-		
-		if (User.findAll().size() > 0 && controllers.Application.deployment() == null)
-			Setting.set("deployment", "server");
 		
 		if (Setting.get("appearance.title") == null)
 			Setting.set("appearance.title", "DAISY Pipeline 2");
@@ -88,29 +67,26 @@ public class Global extends GlobalSettings {
 							if (Setting.get("dp2ws.endpoint") == null)
 								return;
 							
-							if (Administrator.shuttingDown == null) {
-								Pipeline2WSResponse response;
-								try {
-									String endpoint = Setting.get("dp2ws.endpoint");
-									if (endpoint == null) {
-										controllers.Application.setAlive(null);
-										return;
-									}
-									
-									response = org.daisy.pipeline.client.Alive.get(endpoint);
-									if (response.status != 200) {
-										controllers.Application.setAlive(null);
-										
-									} else {
-										controllers.Application.setAlive(new org.daisy.pipeline.client.models.Alive(response));
-										if ("desktop".equals(controllers.Application.deployment()))
-											Pipeline2Engine.setState(Pipeline2Engine.State.RUNNING);
-									}
-								} catch (Pipeline2WSException e) {
-									Logger.error(e.getMessage(), e);
+							Pipeline2WSResponse response;
+							try {
+								String endpoint = Setting.get("dp2ws.endpoint");
+								if (endpoint == null) {
 									controllers.Application.setAlive(null);
+									return;
 								}
+								
+								response = org.daisy.pipeline.client.Alive.get(endpoint);
+								if (response.status != 200) {
+									controllers.Application.setAlive(null);
+									
+								} else {
+									controllers.Application.setAlive(new org.daisy.pipeline.client.models.Alive(response));
+								}
+							} catch (Pipeline2WSException e) {
+								Logger.error(e.getMessage(), e);
+								controllers.Application.setAlive(null);
 							}
+							
 						} catch (javax.persistence.PersistenceException e) {
 							// Ignores this exception that happens on shutdown:
 							// javax.persistence.PersistenceException: java.sql.SQLException: Attempting to obtain a connection from a pool that has already been shutdown.
@@ -142,7 +118,7 @@ public class Global extends GlobalSettings {
 									for (NotificationConnection c : browsers) {
 										if (c.notifications.size() == 0) {
 	//										Logger.debug("*heartbeat* for user #"+userId+" and browser window #"+c.browserId);
-											c.push(new Notification("heartbeat", controllers.Application.getPipeline2EngineState()));
+											c.push(new Notification("heartbeat", controllers.Application.pipeline2EngineAvailable()));
 										}
 									}
 								}
@@ -164,8 +140,6 @@ public class Global extends GlobalSettings {
 				new Runnable() {
 					public void run() {
 						try {
-							if (Administrator.shuttingDown != null) return;
-							
 							// unused uploads are deleted after one hour
 							Date timeoutDate = new Date(new Date().getTime() - 600000L);
 							
@@ -207,8 +181,6 @@ public class Global extends GlobalSettings {
 				new Runnable() {
 					public void run() {
 						try {
-							if (Administrator.shuttingDown != null) return;
-							
 							String endpoint = Setting.get("dp2ws.endpoint");
 							if (endpoint == null)
 								return;
