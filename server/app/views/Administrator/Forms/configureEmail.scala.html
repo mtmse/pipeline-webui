@@ -41,8 +41,9 @@
 						<input type="url" name="absoluteURL" value="@Setting.get("absoluteURL")" placeholder="URL to the Web UI"
 							id="configureEmail-absoluteURL" aria-labelledby="configureEmail-absoluteURL-label"/>
 						<button type="submit" value="Save" name="submit" class="btn btn-primary">Save</button>
-						<p class="help-block">This is the protocol and host to be used in absolute URLs. If the Pipeline 2 Web UI is running behind
-						a proxy you will probably have to change this. For instance: <code id="configureEmail-absoluteURL-example">http://localhost:9000</code></p>
+						<p class="help-block">This is the URL to be used when generating links in e-mails.
+						For instance: <code id="configureEmail-absoluteURL-example">http://example.com:9000</code>.
+						Note that the protocol (<code>http://</code>) should be included and there should be no trailing slash.</p>
 						@if(configureEmailForm.field("enable").errors().size() > 0){
 							<p class="help-inline">@configureEmailForm.error("enable").message</p>
 						}

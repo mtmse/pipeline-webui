@@ -13,10 +13,12 @@ import com.avaje.ebean.*;
 
 import javax.persistence.*;
 
-import org.daisy.pipeline.client.Pipeline2WSException;
-import org.daisy.pipeline.client.Pipeline2WSResponse;
+import org.daisy.pipeline.client.Pipeline2Exception;
+import org.daisy.pipeline.client.Pipeline2Logger;
+import org.daisy.pipeline.client.http.WSResponse;
+import org.daisy.pipeline.client.models.Message;
 import org.daisy.pipeline.client.models.Job.Status;
-import org.daisy.pipeline.client.models.job.Message;
+import org.daisy.pipeline.client.models.Result;
 import org.w3c.dom.Document;
 
 import controllers.Application;
@@ -82,24 +84,24 @@ public class Job extends Model implements Comparable<Job> {
 	}
 	
 	/** Make job from engine job */
-	public Job(org.daisy.pipeline.client.models.Job fwkJob) {
-		this.id = fwkJob.id;
+	public Job(org.daisy.pipeline.client.models.Job engineJob) {
+		this.id = engineJob.getId();
 		this.user = -1L;
-		this.nicename = fwkJob.script.id+" (Command Line Interface)";
+		this.nicename = engineJob.getScript().getId()+" (Command Line Interface)";
 		this.created = new Date();
 		this.notifiedCreated = false;
 		this.notifiedComplete = false;
-		this.userNicename = "Command Line Interface"; // could be something other than the CLI, but in 99% of the cases it will be the CLI
+		this.userNicename = "Command Line Interface"; // could be something other than the CLI, but in 99% of the cases it will probably be the CLI
 		
-		if (!org.daisy.pipeline.client.models.Job.Status.IDLE.equals(fwkJob.status)) {
+		if (!org.daisy.pipeline.client.models.Job.Status.IDLE.equals(engineJob.getStatus())) {
 			this.started = this.created;
-			if (!org.daisy.pipeline.client.models.Job.Status.RUNNING.equals(fwkJob.status)) {
+			if (!org.daisy.pipeline.client.models.Job.Status.RUNNING.equals(engineJob.getStatus())) {
 				this.finished = this.started;
 			}
 		}
 		
-		this.scriptId = fwkJob.script.id;
-		this.scriptName = fwkJob.script.nicename;
+		this.scriptId = engineJob.getScript().getId();
+		this.scriptName = engineJob.getScript().getNicename();
 	}
 
 	public int compareTo(Job other) {
@@ -138,35 +140,20 @@ public class Job extends Model implements Comparable<Job> {
 							Integer fromSequence = Job.lastMessageSequence.containsKey(id) ? Job.lastMessageSequence.get(id) : null;
 //							Logger.debug("checking job #"+id+" for updates from message #"+fromSequence);
 							
-							Pipeline2WSResponse wsJob;
-							org.daisy.pipeline.client.models.Job job;
+							org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, fromSequence);
 							
-							try {
-								wsJob = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, fromSequence);
-								
-								if (wsJob.status != 200 && wsJob.status != 201) {
-									return;
-								}
-								
-								Document xml = wsJob.asXml();
-								job = new org.daisy.pipeline.client.models.Job(xml);
-								
-								if (Application.debug)
-									Logger.debug(XML.toString(xml));
-								
-							} catch (Pipeline2WSException e) {
-								Logger.error(e.getMessage(), e);
+							if (job == null) {
 								return;
 							}
 							
-							Job webUiJob = Job.findById(job.id);
+							Job webUiJob = Job.findById(job.getId());
 							
 							if (webUiJob == null) {
 								// Job has been deleted; stop updates
 								pushNotifier.cancel();
 							}
 							
-							if (job.status != Status.RUNNING && job.status != Status.IDLE) {
+							if (job.getStatus() != Status.RUNNING && job.getStatus() != Status.IDLE) {
 								pushNotifier.cancel();
 								if (webUiJob.finished == null) {
 									// pushNotifier tends to fire multiple times after canceling it, so this if{} is just to fire the "finished" event exactly once
@@ -175,44 +162,45 @@ public class Job extends Model implements Comparable<Job> {
 									Map<String,String> finishedMap = new HashMap<String,String>();
 									finishedMap.put("text", webUiJob.finished.toString());
 									finishedMap.put("number", webUiJob.finished.getTime()+"");
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-finished-"+job.id, finishedMap));
-									
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+job.id, job.results));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-finished-"+job.getId(), finishedMap));
+									Map<Result,Map<Result,List<Result>>> results = new HashMap<Result,Map<Result,List<Result>>>();
+									results.put(job.getResult(), job.getResults());
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+job.getId(), results));
 								}
 							}
 							
-							if (!job.status.equals(lastStatus.get(job.id))) {
-								lastStatus.put(job.id, job.status);
-								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+job.id, job.status));
+							if (!job.getStatus().equals(lastStatus.get(job.getId()))) {
+								lastStatus.put(job.getId(), job.getStatus());
+								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+job.getId(), job.getStatus()));
 								
-								webUiJob.status = job.status.toString();
+								webUiJob.status = job.getStatus().toString();
 								
-								if (job.status == Status.RUNNING) {
+								if (job.getStatus() == Status.RUNNING) {
 									// job status changed from IDLE to RUNNING
 									webUiJob.started = new Date();
 									Map<String,String> startedMap = new HashMap<String,String>();
 									startedMap.put("text", webUiJob.started.toString());
 									startedMap.put("number", webUiJob.started.getTime()+"");
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+job.id, startedMap));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+job.getId(), startedMap));
 								}
 								
 								webUiJob.save();
 							}
 							
 							try {
-								List<org.daisy.pipeline.client.models.job.Message> messages = job.getMessagesAsList();
+								List<org.daisy.pipeline.client.models.Message> messages = job.getMessages();
 								
-								for (org.daisy.pipeline.client.models.job.Message message : messages) {
-									Notification notification = new Notification("job-message-"+job.id, message);
+								for (org.daisy.pipeline.client.models.Message message : messages) {
+									Notification notification = new Notification("job-message-"+job.getId(), message);
 									NotificationConnection.pushJobNotification(webUiJob.user, notification);
 								}
 								
 								if (messages.size() > 0) {
-									Job.lastMessageSequence.put(job.id, messages.get(messages.size()-1).sequence);
+									Job.lastMessageSequence.put(job.getId(), messages.get(messages.size()-1).sequence);
 								}
 								
-							} catch (Pipeline2WSException e) {
-								Logger.error("An error occured while trying to parse the job messages for job "+job.id, e);
+							} catch (Pipeline2Exception e) {
+								Logger.error("An error occured while trying to parse the job messages for job "+job.getId(), e);
 								e.printStackTrace();
 							}
 							
@@ -234,14 +222,17 @@ public class Job extends Model implements Comparable<Job> {
 	@Override
 	public void delete() {
 		Logger.debug("deleting "+this.id+" (sending DELETE request)");
-		try {
-			org.daisy.pipeline.client.Jobs.delete(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), this.id);
-		} catch (Pipeline2WSException e) {
-			Logger.warn("Unable to send DELETE request for deleting the job #"+this.id+" from the Pipeline 2 Engine",e);
+		boolean success = Application.ws.deleteJob(this.id);
+		if (!success) {
+			Pipeline2Logger.logger().error("An error occured when trying to delete job "+this.id+" from the Pipeline 2 Engine");
 		}
 		List<Upload> uploads = getUploads();
 		for (Upload upload : uploads)
 			upload.delete();
 		super.delete();
+	}
+	
+	public void compile() {
+		
 	}
 }

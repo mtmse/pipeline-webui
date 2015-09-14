@@ -28,16 +28,24 @@ import models.UserSetting;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import org.daisy.pipeline.client.Pipeline2WS;
-import org.daisy.pipeline.client.Pipeline2WSException;
-import org.daisy.pipeline.client.Pipeline2WSResponse;
-import org.daisy.pipeline.client.models.Script;
-import org.daisy.pipeline.client.models.script.Argument;
+
+
+
+
+
+//import org.daisy.pipeline.client.Pipeline2WS;
+import org.daisy.pipeline.client.Pipeline2Exception;
+import org.daisy.pipeline.client.Pipeline2Logger;
+import org.daisy.pipeline.client.http.Pipeline2HttpClient;
+import org.daisy.pipeline.client.http.WS;
+import org.daisy.pipeline.client.http.WSResponse;
+import org.daisy.pipeline.client.utils.XPath;
+//import org.daisy.pipeline.client.models.Script;
+//import org.daisy.pipeline.client.models.script.Argument;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import play.Logger;
-import play.libs.XPath;
 import play.mvc.*;
 import utils.ContentType;
 import utils.Files;
@@ -83,9 +91,10 @@ public class Jobs extends Controller {
 		if (user == null || (user.id < 0 && !"true".equals(Setting.get("users.guest.shareJobs"))))
 			return unauthorized("unauthorized");
 		
-		Pipeline2WSResponse jobs;
+		WSResponse jobs;
 		NodeList jobNodes;
-		try {
+		List<Job> jobList;
+		/*try {
 			jobs = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"));
 			
 			if (jobs.status != 200) {
@@ -95,32 +104,33 @@ public class Jobs extends Controller {
 			
 			jobNodes = XPath.selectNodes("//d:job", jobs.asXml(), Pipeline2WS.ns);
 			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return internalServerError("A problem occured while communicating with the Pipeline engine");
-		}
-		
-		List<Job> jobList = new ArrayList<Job>();
-		for (int n = 0; n < jobNodes.getLength(); n++) {
-			Node jobNode = jobNodes.item(n);
-			
-			Job job = Job.findById(XPath.selectText("@id", jobNode, Pipeline2WS.ns));
-			if (job == null) {
-				Logger.warn("No job with id "+XPath.selectText("@id", jobNode, Pipeline2WS.ns)+" was found.");
-			} else {
-				job.href = XPath.selectText("@href", jobNode, Pipeline2WS.ns);
-				job.status = XPath.selectText("@status", jobNode, Pipeline2WS.ns);
-				if (user.admin || user.id >= 0 && user.id.equals(job.user) || user.id < 0 && job.user < 0 && "true".equals(Setting.get("users.guest.shareJobs"))) {
-					jobList.add(job);
+			jobList = new ArrayList<Job>();
+			for (int n = 0; n < jobNodes.getLength(); n++) {
+				Node jobNode = jobNodes.item(n);
+				
+				Job job = Job.findById(XPath.selectText("@id", jobNode, XPath.dp2ns));
+				if (job == null) {
+					Logger.warn("No job with id "+XPath.selectText("@id", jobNode, XPath.dp2ns)+" was found.");
+				} else {
+					job.href = XPath.selectText("@href", jobNode, XPath.dp2ns);
+					job.status = XPath.selectText("@status", jobNode, XPath.dp2ns);
+					if (user.admin || user.id >= 0 && user.id.equals(job.user) || user.id < 0 && job.user < 0 && "true".equals(Setting.get("users.guest.shareJobs"))) {
+						jobList.add(job);
+					}
 				}
 			}
-		}
+			
+		} catch (Pipeline2Exception e) {
+			Logger.error(e.getMessage(), e);
+			return internalServerError("A problem occured while communicating with the Pipeline engine");
+		}*/
 		
-		Collections.sort(jobList);
-		Collections.reverse(jobList);
+//		Collections.sort(jobList);
+//		Collections.reverse(jobList);
 		
-		JsonNode jobsJson = play.libs.Json.toJson(jobList);
-		return ok(jobsJson);
+//		JsonNode jobsJson = play.libs.Json.toJson(jobList);
+//		return ok(jobsJson);
+		return null;
 	}
 	
 	public static Result getJob(String id) {
@@ -133,8 +143,8 @@ public class Jobs extends Controller {
 		
 		Logger.debug("getJob("+id+")");
 		
-		Pipeline2WSResponse response;
-		org.daisy.pipeline.client.models.Job job;
+		WSResponse response;
+		/*org.daisy.pipeline.client.models.Job job;
 		try {
 			Logger.debug("org.daisy.pipeline.client.Jobs.get ...");
 			response = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, null);
@@ -148,7 +158,7 @@ public class Jobs extends Controller {
 			job = new org.daisy.pipeline.client.models.Job(response.asXml());
 			Logger.debug("new org.daisy.pipeline.client.models.Job done");
 			
-		} catch (Pipeline2WSException e) {
+		} catch (Pipeline2Exception e) {
 			Logger.error(e.getMessage(), e);
 			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
 		}
@@ -168,7 +178,7 @@ public class Jobs extends Controller {
 		webuiJob.status = job.status.toString();
 		try {
 			webuiJob.messages = job.getMessagesAsList();
-		} catch (Pipeline2WSException e) {
+		} catch (Pipeline2Exception e) {
 			return internalServerError(e.getMessage());
 		}
 //		if (!Job.lastMessageSequence.containsKey(job.id) && job.messages.size() > 0) {
@@ -180,7 +190,7 @@ public class Jobs extends Controller {
 //		}
 		
 		User.flashBrowserId(user);
-		return ok(views.html.Jobs.getJob.render(job, webuiJob));
+		return ok(views.html.Jobs.getJob.render(job, webuiJob));*/ return null;
 	}
 	
 	public static Result getJobJson(String id) {
@@ -191,42 +201,33 @@ public class Jobs extends Controller {
 		if (user == null)
 			return unauthorized("unauthorized");
 		
-		Pipeline2WSResponse response;
-		org.daisy.pipeline.client.models.Job job;
-		try {
-			response = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, null);
-			
-			if (response.status != 200 && response.status != 201) {
-				Logger.error(response.status+": "+response.statusName+" - "+response.statusDescription+" : "+response.asText());
-				return internalServerError(response.statusDescription);
-			}
-			
-			job = new org.daisy.pipeline.client.models.Job(response.asXml());
-			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return internalServerError("A problem occured while communicating with the Pipeline engine");
-		}
-		
-		Job webuiJob = Job.findById(job.id);
+		Job webuiJob = Job.findById(id);
 		if (webuiJob == null) {
-			Logger.debug("Job #"+job.id+" was not found.");
+			Logger.debug("Job #"+id+" was not found.");
 			return notFound("Sorry; something seems to have gone wrong. The job was not found.");
 		}
+		
 		if (!(	user.admin
 			||	webuiJob.user.equals(user.id)
 			||	webuiJob.user < 0 && user.id < 0 && "true".equals(Setting.get("users.guest.shareJobs"))
-				))
+			)) {
 			return forbidden("You are not allowed to view this job.");
+		}
 		
-		webuiJob.status = job.status.toString();
+		org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, 0);
+		if (job == null) {
+			Logger.error("An error occured while fetching the job from the engine");
+			return internalServerError("An error occured while fetching the job from the engine");
+		}
+		
+		webuiJob.status = job.getStatus().toString();
 		try {
-			webuiJob.messages = job.getMessagesAsList();
-		} catch (Pipeline2WSException e) {
+			webuiJob.messages = job.getMessages();
+			
+		} catch (Pipeline2Exception e) {
 			return play.mvc.Results.internalServerError(e.getMessage());
 		}
-//		webuiJob.messages = job.messages;
-//		Collections.sort(job.messages);
+		Collections.sort(webuiJob.messages);
 		
 		JsonNode jobJson = play.libs.Json.toJson(webuiJob);
 		return ok(jobJson);
@@ -255,19 +256,22 @@ public class Jobs extends Controller {
 					))
 				return forbidden("You are not allowed to view this job.");
 		
-		try {
+//		try {
 			Logger.info("retrieving result from Pipeline 2 engine...");
 			
 			Logger.debug("href: "+(href==null?"[null]":href));
 			
-			File result = org.daisy.pipeline.client.Jobs.getResultFromFile(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, href);
+			org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, 0);
+			org.daisy.pipeline.client.models.Result result = job.getResultFromHref(href);
+			File resultFile = result.asFile();
+			// org.daisy.pipeline.client.Jobs.getResultFromFile(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, href);
 			
-			if (result == null || !result.exists()) {
+			if (resultFile == null || !resultFile.exists()) {
 				return badRequest("Unable to retrieve file.");
 			}
 			
 			try {
-				String contentType = ContentType.probe(result.getName(), new FileInputStream(result));
+				String contentType = ContentType.probe(resultFile.getName(), new FileInputStream(resultFile));
 				response().setContentType(contentType);
 				
 				Logger.debug("contentType: "+contentType);
@@ -276,7 +280,7 @@ public class Jobs extends Controller {
 				/* ignore */
 			}
 			
-			long size = result.length();
+			long size = resultFile.length();
 			if (size > 0) {
 				response().setHeader("Content-Length", size+"");
 				Logger.debug("size: "+size);
@@ -296,7 +300,7 @@ public class Jobs extends Controller {
 			String parse = request().getQueryString("parse");
 			if ("report".equals(parse)) {
 				response().setContentType("text/html");
-				String report = Files.read(result);
+				String report = Files.read(resultFile);
 				Pattern regex = Pattern.compile("^.*<body[^>]*>(.*)</body>.*$", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 				Matcher regexMatcher = regex.matcher(report);
 				String body = null;
@@ -312,12 +316,12 @@ public class Jobs extends Controller {
 				
 			}
 			
-			return ok(result);
+			return ok(resultFile);
 			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
-		}
+//		} catch (Pipeline2Exception e) {
+//			Logger.error(e.getMessage(), e);
+//			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
+//		}
 	}
 
 	public static Result getLog(final String id) {
@@ -339,25 +343,19 @@ public class Jobs extends Controller {
 					))
 				return forbidden("You are not allowed to view this job.");
 		
-		Pipeline2WSResponse jobLog;
-		try {
-			jobLog = org.daisy.pipeline.client.Jobs.getLog(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id);
-	
-			if (jobLog.status != 200 && jobLog.status != 201 && jobLog.status != 204) {
-				return Application.error(jobLog.status, jobLog.statusName, jobLog.statusDescription, jobLog.asText());
-			}
-			
-			if (jobLog.status == 204) {
-				return ok("The log is empty.");
-	
-			} else {
-				return ok(jobLog.asText());
-			}
-			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
+		String jobLog = Application.ws.getJobLog(id);
+		//jobLog = org.daisy.pipeline.client.Jobs.getLog(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id);
+		
+		if (jobLog == null) {
+			Pipeline2Logger.logger().error("Was not able to read job log for "+id);
+			return Application.internalServerError("Unable to retrieve job log.");
 		}
+		
+		if (jobLog.length() == 0) {
+			return ok("The log is empty.");
+		}
+
+		return ok(jobLog);
 	}
 
     public static Result postJob() {
@@ -382,16 +380,11 @@ public class Jobs extends Controller {
 		}
 
 		// Get a description of the script from Pipeline 2 Web API
-		Pipeline2WSResponse scriptResponse;
-		org.daisy.pipeline.client.models.Script script;
-		try {
-			scriptResponse = org.daisy.pipeline.client.Scripts.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id);
-			if (scriptResponse.status != 200) { return Application.error(scriptResponse.status, scriptResponse.statusName, scriptResponse.statusDescription, scriptResponse.asText()); }
-			script = new org.daisy.pipeline.client.models.Script(scriptResponse);
-			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
+		WSResponse scriptResponse;
+		org.daisy.pipeline.client.models.Script script = Application.ws.getScript(id);
+		if (script == null) {
+			Logger.error("An error occured while trying to ready the script with id '"+id+"' from the engine.");
+			return Application.internalServerError("An error occured while trying to ready the script with id '"+id+"' from the engine.");
 		}
 		
 		// Parse and validate the submitted form (also create any necessary output directories in case of local mode)
@@ -447,7 +440,7 @@ public class Jobs extends Controller {
 				}
 			}
 			
-			if (Application.getAlive().localfs) {
+			/*if (Application.getAlive().localfs) {
 				Logger.debug("Running the Web UI and fwk on the same filesystem, no need to ZIP files...");
 				for (Argument arg : script.arguments) {
 					if (arg.output != null) {
@@ -489,7 +482,7 @@ public class Jobs extends Controller {
 						throw new RuntimeErrorException(new Error(e), "Unable to zip context directory.");
 					}
 				}
-			}
+			}*/
 
 		}
 		
@@ -504,30 +497,37 @@ public class Jobs extends Controller {
 		else
 			Logger.debug("Context ZIP file is present, submitting job with context ZIP file");
 		
-		Pipeline2WSResponse job;
+		//WSResponse job;
 		String jobId;
-		try {
-			job = org.daisy.pipeline.client.Jobs.post(
-					Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"),
-					scriptForm.script.href, scriptForm.script.arguments, contextZipFile, callbacks
-			);
+		org.daisy.pipeline.client.models.Job job = null; // TODO: populate job instead of setting it to null! new Job (script href, script arguments, job context, callbacks, etc.)
+//		try {
+			job = Application.ws.postJob(job, contextZipFile);
+//			job = org.daisy.pipeline.client.Jobs.post(
+//					Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"),
+//					scriptForm.script.href, scriptForm.script.arguments, contextZipFile, callbacks
+//			);
 			
-			if (job.status != 200 && job.status != 201) {
-				return Application.error(job.status, job.statusName, job.statusDescription, job.asText());
+			if (job == null) {
+				Logger.error("An error occured when trying to post job");
+				Application.internalServerError("An error occured when trying to post job");
 			}
 			
-			jobId = XPath.selectText("/*/@id", job.asXml(), Pipeline2WS.ns);
+//			if (job.status != 200 && job.status != 201) {
+//				return Application.error(job.status, job.statusName, job.statusDescription, job.asText());
+//			}
+//			
+//			jobId = XPath.selectText("/*/@id", job.asXml(), Pipeline2WS.ns);
 			
-		} catch (Pipeline2WSException e) {
-			Logger.error(e.getMessage(), e);
-			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
-		}
+//		} catch (Pipeline2Exception e) {
+//			Logger.error(e.getMessage(), e);
+//			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
+//		}
 		
-		Job webUiJob = new Job(jobId, user);
+		Job webUiJob = new Job(job.getId(), user);
 		webUiJob.nicename = id;
 		webUiJob.localDirName = timeString;
-		webUiJob.scriptId = script.id;
-		webUiJob.scriptName = script.nicename;
+		webUiJob.scriptId = script.getId();
+		webUiJob.scriptName = script.getNicename();
 		if (scriptForm.uploads != null && scriptForm.uploads.size() > 0) {
 			String filenames = "";
 			int i = 0;
@@ -547,7 +547,7 @@ public class Jobs extends Controller {
 		NotificationConnection.push(webUiJob.user, new Notification("job-created-"+webUiJob.id, webUiJob.created.toString()));
 		for (Long uploadId : scriptForm.uploads.keySet()) {
 			// associate uploads with job
-			scriptForm.uploads.get(uploadId).job = jobId;
+			scriptForm.uploads.get(uploadId).job = job.getId();
 			scriptForm.uploads.get(uploadId).save();
 		}
 		
@@ -555,12 +555,12 @@ public class Jobs extends Controller {
 		
 		JsonNode jobJson = play.libs.Json.toJson(webUiJob);
 		Notification jobNotification = new Notification("new-job", jobJson);
-		Logger.debug("pushed new-job notification with status=IDLE for job #"+jobId);
+		Logger.debug("pushed new-job notification with status=IDLE for job #"+job.getId());
 		NotificationConnection.pushJobNotification(webUiJob.user, jobNotification);
 		webUiJob.pushNotifications();
 		
 		if (user.id < 0 && scriptForm.guestEmail != null && scriptForm.guestEmail.length() > 0) {
-			String jobUrl = Application.absoluteURL(routes.Jobs.getJob(jobId).absoluteURL(request())+"?guestid="+(models.User.parseUserId(session())!=null?-models.User.parseUserId(session()):""));
+			String jobUrl = Application.absoluteURL(routes.Jobs.getJob(job.getId()).absoluteURL(request())+"?guestid="+(models.User.parseUserId(session())!=null?-models.User.parseUserId(session()):""));
 			String html = views.html.Account.emailJobCreated.render(jobUrl, webUiJob.nicename).body();
 			String text = "To view your Pipeline 2 job, go to this web address: " + jobUrl;
 			if (Account.sendEmail("Job created: "+webUiJob.nicename, html, text, scriptForm.guestEmail, scriptForm.guestEmail))
@@ -569,7 +569,7 @@ public class Jobs extends Controller {
 				flash("error", "Was unable to send an e-mail with a link to this job.");
 		}
 		
-		return redirect(controllers.routes.Jobs.getJob(jobId));
+		return redirect(controllers.routes.Jobs.getJob(job.getId()));
 	}
     
     public static Result delete(String jobId) {

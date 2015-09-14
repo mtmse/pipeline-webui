@@ -9,8 +9,10 @@ import java.util.concurrent.TimeUnit;
 
 import javax.persistence.Transient;
 
-import org.daisy.pipeline.client.Pipeline2WSException;
-import org.daisy.pipeline.client.Pipeline2WSResponse;
+import org.daisy.pipeline.client.Pipeline2Exception;
+import org.daisy.pipeline.client.http.WSResponse;
+//import org.daisy.pipeline.client.models.Script;
+
 import org.daisy.pipeline.client.models.Script;
 
 import controllers.SystemStatus.EngineAttempt;
@@ -118,23 +120,61 @@ public class Administrator extends Controller {
 	public static class SetStorageDirsForm {
 		@Required
 		public String uploaddir;
+		
+		@Required
+		public String jobsdir;
+		
+		@Required
+		public String templatesdir;
 
 		public static void validate(Form<SetStorageDirsForm> filledForm) {
 			String uploadPath = filledForm.field("uploaddir").valueOr("");
 			if (!uploadPath.endsWith(System.getProperty("file.separator")))
 				uploadPath += System.getProperty("file.separator");
-			File dir = new File(uploadPath);
-			if (!dir.exists())
+			
+			String jobsPath = filledForm.field("jobsdir").valueOr("");
+			if (!jobsPath.endsWith(System.getProperty("file.separator")))
+				jobsPath += System.getProperty("file.separator");
+			
+			String templatesPath = filledForm.field("templatesdir").valueOr("");
+			if (!templatesPath.endsWith(System.getProperty("file.separator")))
+				templatesPath += System.getProperty("file.separator");
+			
+			File uploadDir = new File(uploadPath);
+			if (!uploadDir.exists())
 				filledForm.reject("uploaddir", "The directory does not exist.");
-			else if (!dir.isDirectory())
+			else if (!uploadDir.isDirectory())
 				filledForm.reject("uploaddir", "The path does not point to a directory.");
+			
+			File jobsDir = new File(jobsPath);
+			if (!jobsDir.exists())
+				filledForm.reject("jobsdir", "The directory does not exist.");
+			else if (!jobsDir.isDirectory())
+				filledForm.reject("jobsdir", "The path does not point to a directory.");
+			
+			File templatesDir = new File(templatesPath);
+			if (!templatesDir.exists())
+				filledForm.reject("templatesdir", "The directory does not exist.");
+			else if (!templatesDir.isDirectory())
+				filledForm.reject("templatesdir", "The path does not point to a directory.");
 		}
 
 		public static void save(Form<SetStorageDirsForm> filledForm) {
 			String uploadPath = filledForm.field("uploaddir").valueOr("");
 			if (!uploadPath.endsWith(System.getProperty("file.separator")))
 				uploadPath += System.getProperty("file.separator");
+			
+			String jobsPath = filledForm.field("jobsdir").valueOr("");
+			if (!jobsPath.endsWith(System.getProperty("file.separator")))
+				jobsPath += System.getProperty("file.separator");
+			
+			String templatesPath = filledForm.field("templatesdir").valueOr("");
+			if (!templatesPath.endsWith(System.getProperty("file.separator")))
+				templatesPath += System.getProperty("file.separator");
+			
 			Setting.set("uploads", uploadPath);
+			Setting.set("jobs", uploadPath);
+			Setting.set("templates", uploadPath);
 		}
 	}
 
@@ -274,25 +314,18 @@ public class Administrator extends Controller {
 		public static Object scriptPermissions() {
 			Map<String,Boolean> scriptPermissions = new HashMap<String,Boolean>();
 			
-			List<Script> scripts = null;
-			try {
-				Pipeline2WSResponse response = org.daisy.pipeline.client.Scripts.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"));
-				if (response.status != 200) {
-					return response.statusName;
-				} else {
-					scripts = Script.getScripts(response);
-				}
-			} catch (Pipeline2WSException e) {
-				Logger.error(e.getMessage(), e);
+			List<Script> scripts = Application.ws.getScripts();
+			if (scripts == null) {
+				Logger.error("Something bad happened, try refreshing the page or ask a technician for help");
 				return "Something bad happened, try refreshing the page or ask a technician for help";
 			}
 			
 			for (Script script : scripts) {
-				String enabled = UserSetting.get(-2L, "scriptEnabled-"+script.id);
+				String enabled = UserSetting.get(-2L, "scriptEnabled-"+script.getId());
 				if ("false".equals(enabled)) {
-					scriptPermissions.put(script.id, false);
+					scriptPermissions.put(script.getId(), false);
 				} else {
-					scriptPermissions.put(script.id, true);
+					scriptPermissions.put(script.getId(), true);
 				}
 			}
 			

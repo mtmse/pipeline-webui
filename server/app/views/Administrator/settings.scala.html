@@ -106,7 +106,7 @@
 		<h2>Storage directories</h2>
 		<br/>
 		<script type="text/javascript">
-	  		$(function(){ DP2Forms.startValidation("setStorageDirs", "@routes.Administrator.postSettings()?validate", ["uploaddir","resultdir","tempdir"]); });
+	  		$(function(){ DP2Forms.startValidation("setStorageDirs", "@routes.Administrator.postSettings()?validate", ["uploaddir","jobsdir","templatesdir"]); });
 		</script>
 		@views.html.Administrator.Forms.setStorageDirs(forms.setStorageDirsForm, routes.Administrator.postSettings(), null, Controller.flash("settings.formName")=="setStorageDirs")
 	</section>

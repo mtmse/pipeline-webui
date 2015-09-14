@@ -1,8 +1,16 @@
 package controllers;
 
+import java.util.Enumeration;
 import java.util.Map;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.net.URL;
 
 import play.mvc.*;
 import play.data.*;
@@ -28,31 +36,130 @@ public class FirstUse extends Controller {
 		User user = null;
 		
 		if (isFirstUse()) {
-			// set initial absoluteURL (will typically be "http://localhost:9000")
-			Setting.set("absoluteURL", routes.FirstUse.welcome().absoluteURL(request()).replaceFirst("^([^/]+:/+[^/]+)/.*$", "$1"));
+			// first determine domain/ip/port
 			
-			// Server mode
+			if (Setting.get("absoluteURL") == null) {
+				URL whatismyip;
+				String protocol = "http";
+				String ip = null;
+				String dns = null;
+				int port = 80;
+				
+				try {
+					whatismyip = new URL("http://checkip.amazonaws.com");
+					BufferedReader in = new BufferedReader(new InputStreamReader(whatismyip.openStream()));
+					ip = in.readLine();
+				} catch (Exception e) {}
+				
+				Enumeration<NetworkInterface> interfaces;
+				try {
+					interfaces = NetworkInterface.getNetworkInterfaces();
+					while (interfaces.hasMoreElements()) {
+						NetworkInterface iface = interfaces.nextElement();
+						try {
+							if(iface.isUp()) {
+								Enumeration<InetAddress> addresses = iface.getInetAddresses();
+								while (addresses.hasMoreElements()) {
+									InetAddress address = addresses.nextElement();
+									if (!address.isLinkLocalAddress() && !address.isSiteLocalAddress() && !address.isLoopbackAddress()) {
+										if (ip == null || ip.equals(address.getHostAddress())) {
+											dns = address.getCanonicalHostName();
+											break;
+										}
+									}
+								}
+								if (dns != null) {
+									break;
+								}
+							}
+						} catch (SocketException e) {
+							Logger.error("Unable to get information about network interface.", e);
+						}
+					}
+				} catch (SocketException e) {
+					Logger.error("Unable to get information about network interfaces.", e);
+				}
+				
+				try {
+					URL requestUrl = new URL(routes.FirstUse.welcome().absoluteURL(request()));
+					String requestHostname = requestUrl.getHost();
+					assert(requestHostname != null);
+					if ((ip == null && dns == null) || requestHostname.equals(ip) || requestHostname.equals(dns)) {
+						// Use port and protocol based on the HTTP request. If the request hostname equals the external
+						// ip then the Web UI is probably being configured from a different computer,
+						// which lets us determine the port and protocol (https vs http) that
+						// the Web UI is exposed with. We also need to fall back to this method if the ip could
+						// not be determined by looking at the network interfaces, which most likely means that
+						// the Web UI is being configured from localhost on a computer without internet access.
+						port = requestUrl.getPort();
+						protocol = requestUrl.getProtocol();
+					}
+					
+				} catch (MalformedURLException e) {
+					Logger.error("Unable to parse absolute URL to Web UI, setting to defaults...", e);
+					if (ip == null && dns == null) {
+						ip = "localhost";
+						dns = "localhost";
+						port = 9000;
+					}
+				}
+				
+				String absoluteURL = protocol+"://"+(dns == null ? ""+ip : dns)+(port == 80 ? "" : ":"+port);
+				Setting.set("absoluteURL", absoluteURL);
+			}
 			
+			// Set default storage directories 
+			String slash = controllers.Application.SLASH;
+			String dp2data = controllers.Application.DP2DATA;
+			String uploads = dp2data + slash + "webui" + slash + "uploads" + slash;
+			String jobStorage = dp2data + slash + "webui" + slash + "jobs" + slash;
+			String templateStorage = dp2data + slash + "webui" + slash + "templates" + slash;
+			
+			if (Setting.get("uploads") == null) {
+				File uploadsFile = new File(uploads);
+				uploadsFile.mkdirs();
+				try {
+					uploads = uploadsFile.getCanonicalPath();
+					
+				} catch (IOException e) { /* ignore */ }
+				
+				Setting.set("uploads", uploads);
+				
+			}
+			
+			if (Setting.get("jobs") == null) {
+				File jobStorageFile = new File(jobStorage);
+				jobStorageFile.mkdirs();
+				try {
+					jobStorage = jobStorageFile.getCanonicalPath();
+					
+				} catch (IOException e) { /* ignore */ }
+				
+				Setting.set("jobs", jobStorage);
+				
+			}
+			
+			if (Setting.get("templates") == null) {
+				File templateStorageFile = new File(templateStorage);
+				templateStorageFile.mkdirs();
+				try {
+					templateStorage = templateStorageFile.getCanonicalPath();
+					
+				} catch (IOException e) { /* ignore */ }
+				
+				Setting.set("templates", templateStorage);
+				
+			}
+			
+			// set default WS endpoint
+			if (Setting.get("dp2ws.endpoint") == null) {
+				Setting.set("dp2ws.endpoint", Application.DEFAULT_DP2_ENDPOINT);
+			}
+			
+			// if no admin user; display "create admin" form
 			if (User.find.where().eq("admin", true).findRowCount() == 0) {
 				User.flashBrowserId(user);
 				return ok(views.html.FirstUse.createAdmin.render(play.data.Form.form(Administrator.CreateAdminForm.class)));
-			}
-			
-			// require authentication to complete the rest of the first use wizard
-			user = User.authenticate(request(), session());
-			if (user == null || !user.admin) {
-				return redirect(routes.Login.login());
-			}
-			
-			if (Setting.get("dp2ws.endpoint") == null) {
-				User.flashBrowserId(user);
-				return ok(views.html.FirstUse.setWS.render(play.data.Form.form(Administrator.SetWSForm.class)));
-			}
-			
-			if (Setting.get("uploads") == null) {
-				User.flashBrowserId(user);
-				flash("uploads", defaultUploadsDir());
-				return ok(views.html.FirstUse.setStorageDirs.render(play.data.Form.form(Administrator.SetStorageDirsForm.class)));
 			}
 			
 		}
@@ -121,42 +228,6 @@ public class FirstUse extends Controller {
 			return redirect(routes.Login.login());
 		}
 		
-		if ("setWS".equals(formName)) {
-			Form<Administrator.SetWSForm> filledForm = play.data.Form.form(Administrator.SetWSForm.class).bindFromRequest();
-			Administrator.SetWSForm.validate(filledForm);
-			
-			if (query.containsKey("validate")) {
-				User.flashBrowserId(user);
-				return ok(FormHelper.asJson(filledForm,new String[]{"authid","secret"}));
-			
-			} if (filledForm.hasErrors()) {
-				User.flashBrowserId(user);
-	        	return badRequest(views.html.FirstUse.setWS.render(filledForm));
-	        	
-	        } else {
-	        	Administrator.SetWSForm.save(filledForm);
-	        	return redirect(routes.FirstUse.getFirstUse());
-	        }
-		}
-		
-		if ("setStorageDirs".equals(formName)) {
-			Form<Administrator.SetStorageDirsForm> filledForm = play.data.Form.form(Administrator.SetStorageDirsForm.class).bindFromRequest();
-			Administrator.SetStorageDirsForm.validate(filledForm);
-			
-			if (query.containsKey("validate")) {
-				User.flashBrowserId(user);
-				return ok(FormHelper.asJson(filledForm));
-			
-			} else if (filledForm.hasErrors()) {
-				User.flashBrowserId(user);
-	        	return badRequest(views.html.FirstUse.setStorageDirs.render(filledForm));
-	        	
-	        } else {
-	        	Administrator.SetStorageDirsForm.save(filledForm);
-	        	return redirect(routes.FirstUse.getFirstUse());
-	        }
-		}
-		
 		return getFirstUse();
 	}
 	
@@ -165,22 +236,7 @@ public class FirstUse extends Controller {
 	 * @return
 	 */
 	public static boolean isFirstUse() {
-		return User.findAll().size() == 0 || Setting.get("dp2ws.endpoint") == null || Setting.get("uploads") == null;
-	}
-	
-	public static String defaultUploadsDir() {
-		String slash = controllers.Application.SLASH;
-		String dp2temp = controllers.Application.DP2TEMP;
-		String uploads = dp2temp + slash + "uploads" + slash;
-		try {
-			File uploadsFile = new File(uploads);
-			uploadsFile.mkdirs();
-			uploads = uploadsFile.getCanonicalPath();
-		} catch (IOException e) {
-			Logger.error("Was not able to create results directory", e);
-		}
-		if (!uploads.endsWith(slash)) uploads += slash;
-		return uploads;
+		return User.findAll().size() == 0 || Setting.get("dp2ws.endpoint") == null || Setting.get("uploads") == null || Setting.get("jobs") == null || Setting.get("templates") == null;
 	}
 	
 }

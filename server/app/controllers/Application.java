@@ -5,7 +5,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-import org.daisy.pipeline.client.models.Alive;
+import org.daisy.pipeline.client.http.WS;
+import org.daisy.pipeline.client.http.WSInterface;
 
 import controllers.Assets.Asset;
 import models.Notification;
@@ -22,8 +23,6 @@ public class Application extends Controller {
 	
 	public static final String DEFAULT_DP2_ENDPOINT = "http://localhost:8181/ws";
 	public static final String SLASH = System.getProperty("file.separator");
-	public static final String SYSTEM_TEMP;
-	public static final String DP2TEMP;
 	public static final String DP2DATA;
 	static {
 		String os = System.getProperty("os.name");
@@ -45,8 +44,6 @@ public class Application extends Controller {
 		} catch (IOException e) {
 			Logger.error("Could not get canonical path for temporary directory", e);
 		}
-		SYSTEM_TEMP = systemTemp;
-		DP2TEMP = dp2temp;
 		
 		// get data directory for webui
 		String dp2data = System.getenv("DP2DATA");
@@ -73,6 +70,8 @@ public class Application extends Controller {
 		}
 		DP2DATA = dp2data;
 	}
+	
+	public static WSInterface ws = new WS();
 	
 	private static org.daisy.pipeline.client.models.Alive alive = null;
 	

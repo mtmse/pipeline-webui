@@ -1,27 +1,27 @@
-@(arg: org.daisy.pipeline.client.models.script.Argument, script: org.daisy.pipeline.client.models.Script, scriptId: String)
+@(arg: org.daisy.pipeline.client.models.Argument, script: org.daisy.pipeline.client.models.Script, scriptId: String)
 
-@if(arg.sequence==Boolean.TRUE){
+@if(arg.getSequence()==Boolean.TRUE){
 
-	<div class="control-group @("advanced-argument".when(!arg.required))">
+	<div class="control-group @("advanced-argument".when(!arg.getRequired()))">
 		<!-- TODO: if ordered sequence; show up/down controls -->
 		<!-- TODO: allow drag'n'drop for reordering -->
-		<label class="control-label">@arg.nicename</label>
+		<label class="control-label">@arg.getNicename()</label>
 		<div class="controls">
 			<div class="row"></div>
 			<div class="row">
-				<div class="span"><input name="@{arg.kind}1-@{arg.name}" type="text"></div>
+				<div class="span"><input name="@{arg.getKind()}1-@{arg.getName()}" type="text"></div>
 				<div class="span"><button class="btn"><i class="icon-remove"></i> Remove</button></div>
 			</div>
 			<div class="row">
-				<div class="span"><input name="@{arg.kind}2-@{arg.name}" type="text"></div>
+				<div class="span"><input name="@{arg.getKind()}2-@{arg.getName()}" type="text"></div>
 				<div class="span"><button class="btn"><i class="icon-remove"></i> Remove</button></div>
 			</div>
 			<div class="row">
 				<div class="span"></div>
 				<div class="span"><button class="btn"><i class="icon-plus"></i> Add</button></div>
 			</div>
-			@if(arg.desc.length > 0){
-				<span class="help-block">@arg.desc</span>
+			@if(arg.getDesc().length > 0){
+				<span class="help-block">@arg.getDesc()</span>
 			}
 			<span class="help-block"><em><!--TODO-->NOTE: Lists of strings are not yet supported in the Pipeline 2 Web UI. The input fields above are meant as a demonstration of how the string input widget will look like.</em></span>
 		</div>
@@ -29,12 +29,12 @@
 	
 }else{
 
-	<div class="control-group @("advanced-argument".when(!arg.required))">
-		<label class="control-label" for="@{arg.kind}-@{arg.name}">@arg.nicename</label>
+	<div class="control-group @("advanced-argument".when(!arg.getRequired()))">
+		<label class="control-label" for="@{arg.getKind()}-@{arg.getName()}">@arg.getNicename()</label>
 		<div class="controls">
-			<input name="@{arg.kind}-@{arg.name}" id="script-@scriptId-@{arg.kind}-@{arg.name}" type="text"/>
-			@if(arg.desc.length > 0){
-				<span class="help-block">@arg.desc</span>
+			<input name="@{arg.getKind()}-@{arg.getName()}" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}" type="text"/>
+			@if(arg.getDesc().length > 0){
+				<span class="help-block">@arg.getDesc()</span>
 			}
 		</div>
 	</div>

@@ -1,18 +1,33 @@
 import play.*;
 import models.*;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.NetworkInterface;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import org.daisy.pipeline.client.Pipeline2WS;
-import org.daisy.pipeline.client.Pipeline2WSException;
-import org.daisy.pipeline.client.Pipeline2WSResponse;
-import org.daisy.pipeline.client.Pipeline2WSLogger;
+
+
+//import org.daisy.pipeline.client.Pipeline2;
+import org.daisy.pipeline.client.Pipeline2Exception;
+import org.daisy.pipeline.client.Pipeline2Logger;
+import org.daisy.pipeline.client.http.WSResponse;
+//import org.daisy.pipeline.client.Pipeline2Logger;
+
+
 
 import controllers.Administrator;
+import controllers.Application;
 import controllers.FirstUse;
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
@@ -29,10 +44,10 @@ public class Global extends GlobalSettings {
 	public synchronized void onStart(play.Application app) {
 		// Application has started...
 		
-		Pipeline2WS.setLoggerImplementation(new Pipeline2PlayLogger());
+		Pipeline2Logger.setLogger(new Pipeline2PlayLogger());
 		if ("DEBUG".equals(Configuration.root().getString("logger.application"))) {
 			Logger.debug("Enabling clientlib debug mode");
-			Pipeline2WS.logger().setLevel(Pipeline2WSLogger.LEVEL.DEBUG);
+			Pipeline2Logger.logger().setLevel(Pipeline2Logger.LEVEL.DEBUG);
 		}
 		
 		NotificationConnection.notificationConnections = new ConcurrentHashMap<Long,List<NotificationConnection>>();
@@ -66,26 +81,14 @@ public class Global extends GlobalSettings {
 						try {
 							if (Setting.get("dp2ws.endpoint") == null)
 								return;
-							
-							Pipeline2WSResponse response;
-							try {
-								String endpoint = Setting.get("dp2ws.endpoint");
-								if (endpoint == null) {
-									controllers.Application.setAlive(null);
-									return;
-								}
-								
-								response = org.daisy.pipeline.client.Alive.get(endpoint);
-								if (response.status != 200) {
-									controllers.Application.setAlive(null);
-									
-								} else {
-									controllers.Application.setAlive(new org.daisy.pipeline.client.models.Alive(response));
-								}
-							} catch (Pipeline2WSException e) {
-								Logger.error(e.getMessage(), e);
-								controllers.Application.setAlive(null);
+
+							String endpoint = Setting.get("dp2ws.endpoint");
+							if (endpoint == null) {
+								Application.setAlive(null);
+								return;
 							}
+
+							Application.setAlive(controllers.Application.ws.alive());
 							
 						} catch (javax.persistence.PersistenceException e) {
 							// Ignores this exception that happens on shutdown:
@@ -185,12 +188,8 @@ public class Global extends GlobalSettings {
 							if (endpoint == null)
 								return;
 							
-							List<org.daisy.pipeline.client.models.Job> fwkJobs;
-							try {
-								fwkJobs = org.daisy.pipeline.client.models.Job.getJobs(org.daisy.pipeline.client.Jobs.get(endpoint, Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret")));
-								
-							} catch (Pipeline2WSException e) {
-								Logger.error(e.getMessage(), e);
+							List<org.daisy.pipeline.client.models.Job> engineJobs = controllers.Application.ws.getJobs();
+							if (engineJobs == null) {
 								return;
 							}
 							
@@ -198,8 +197,8 @@ public class Global extends GlobalSettings {
 							
 							for (Job webUiJob : webUiJobs) {
 								boolean exists = false;
-								for (org.daisy.pipeline.client.models.Job fwkJob : fwkJobs) {
-									if (webUiJob.id.equals(fwkJob.id)) {
+								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
+									if (webUiJob.id.equals(engineJob.getId())) {
 										exists = true;
 										break;
 									}
@@ -211,17 +210,17 @@ public class Global extends GlobalSettings {
 							}
 							
 							if (controllers.Application.getAlive() != null) {
-								for (org.daisy.pipeline.client.models.Job fwkJob : fwkJobs) {
+								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
 									boolean exists = false;
 									for (Job webUiJob : webUiJobs) {
-										if (fwkJob.id.equals(webUiJob.id)) {
+										if (engineJob.getId().equals(webUiJob.id)) {
 											exists = true;
 											break;
 										}
 									}
 									if (!exists) {
-										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+fwkJob.id);
-										Job webUiJob = new Job(fwkJob);
+										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+engineJob.getId());
+										Job webUiJob = new Job(engineJob);
 										webUiJob.save();
 									}
 								}
