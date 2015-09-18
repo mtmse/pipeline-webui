@@ -3,24 +3,24 @@
 @if(arg.getSequence()==Boolean.TRUE){
 	
 	<div class="control-group @("advanced-argument".when(!arg.getRequired()))">
-		<label class="control-label" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-label">@arg.getNicename()</label>
+		<label class="control-label" id="script-@scriptId-@{arg.getName()}-label">@arg.getNicename()</label>
 		<!-- TODO: add drag'n'drop support for reordering items? -->
 		<div class="controls">
-			<input type="hidden" name="@{arg.getKind()}-@{arg.getName()}" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}" value=""/>
+			<input type="hidden" name="@{arg.getName()}" id="script-@scriptId-@{arg.getName()}" value=""/>
 			<div class="row-fluid">
 				<div class="span6">
 					<div style="display:table;">
 					    <div style="display:table-row;">
 					    	<div style="display:table-cell;">
-								<label for="@{arg.getKind()}-@{arg.getName()}-all" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-all-label">Uploaded files</label>
-								<select style="width:100%;min-width:200px;" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-all" multiple="multiple" size="10" class="all-files" aria-labelledby="@{arg.getKind()}-@{arg.getName()}-all-label @{arg.getKind()}-@{arg.getName()}-label">
-									<optgroup id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-suggested" label="Suggested files"></optgroup>
-									<optgroup id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-other" label="Other files"></optgroup>
+								<label for="@{arg.getName()}-all" id="script-@scriptId-@{arg.getName()}-all-label">Uploaded files</label>
+								<select style="width:100%;min-width:200px;" id="script-@scriptId-@{arg.getName()}-all" multiple="multiple" size="10" class="all-files" aria-labelledby="@{arg.getName()}-all-label @{arg.getName()}-label">
+									<optgroup id="script-@scriptId-@{arg.getName()}-suggested" label="Suggested files"></optgroup>
+									<optgroup id="script-@scriptId-@{arg.getName()}-other" label="Other files"></optgroup>
 								</select>
 							</div>
 							<div style="display:table-cell;vertical-align:middle;min-width:40px;">
-								<button type="button" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-add" class="btn" title="Add"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_211_right_arrow.png")" alt="Add"/></button><br/>
-								<button type="button" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-remove" class="btn" title="Remove"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_210_left_arrow.png")" alt="Remove"/></button>
+								<button type="button" id="script-@scriptId-@{arg.getName()}-add" class="btn" title="Add"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_211_right_arrow.png")" alt="Add"/></button><br/>
+								<button type="button" id="script-@scriptId-@{arg.getName()}-remove" class="btn" title="Remove"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_210_left_arrow.png")" alt="Remove"/></button>
 							</div>
 						</div>
 					</div>
@@ -31,14 +31,14 @@
 					<div style="display:table;">
 					    <div style="display:table-row;">
 					    	<div style="display:table-cell;">
-								<label for="@{arg.getKind()}-@{arg.getName()}-selected" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected-label">Selected files</label>
-								<select style="width:100%;min-width:200px;" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected" multiple="multiple" size="10" aria-labelledby="@{arg.getKind()}-@{arg.getName()}-selected-label @{arg.getKind()}-@{arg.getName()}-label">
+								<label for="@{arg.getName()}-selected" id="script-@scriptId-@{arg.getName()}-selected-label">Selected files</label>
+								<select style="width:100%;min-width:200px;" id="script-@scriptId-@{arg.getName()}-selected" multiple="multiple" size="10" aria-labelledby="@{arg.getName()}-selected-label @{arg.getName()}-label">
 								</select>
 							</div>
 							<div style="display:table-cell;vertical-align:middle;min-width:40px;">
 								@if(arg.getOrdered()==Boolean.TRUE){
-									<button type="button" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-up" class="btn" title="Move up"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_213_up_arrow.png")" alt="Move up"/></button><br/>
-									<button type="button" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-down" class="btn" title="Move down"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_212_down_arrow.png")" alt="Move down"/></button>
+									<button type="button" id="script-@scriptId-@{arg.getName()}-up" class="btn" title="Move up"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_213_up_arrow.png")" alt="Move up"/></button><br/>
+									<button type="button" id="script-@scriptId-@{arg.getName()}-down" class="btn" title="Move down"><img src="@routes.Assets.versioned("images/glyphicons/glyphicons_212_down_arrow.png")" alt="Move down"/></button>
 								}
 							</div>
 						</div>
@@ -53,8 +53,8 @@
 				$(function(){
 					@if(arg.getOrdered()==Boolean.TRUE){
 						/* Event handler for "move up"-button. */
-						$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-up").click(function() {
-							var options = "#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected option";
+						$("#script-@scriptId-@{arg.getName()}-up").click(function() {
+							var options = "#script-@scriptId-@{arg.getName()}-selected option";
 							for (var i = 1; i < $(options).size(); i++) {
 								if (!$($(options)[i-1]).is(":selected") && $($(options)[i]).is(":selected")) {
 									var top = $($(options)[i-1]);
@@ -66,8 +66,8 @@
 						});
 						
 						/* Event handler for "move down"-button. */
-						$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-down").click(function() {
-							var options = "#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected option";
+						$("#script-@scriptId-@{arg.getName()}-down").click(function() {
+							var options = "#script-@scriptId-@{arg.getName()}-selected option";
 							for (var i = $(options).size()-2; i >= 0; i--) {
 								if (!$($(options)[i+1]).is(":selected") && $($(options)[i]).is(":selected")) {
 									var top = $($(options)[i]);
@@ -80,27 +80,27 @@
 					}
 					
 					/* Event handler for "add"-button. */
-					$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-add").click(function() {
-						$.each($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-all option:selected"), function(i,e){
+					$("#script-@scriptId-@{arg.getName()}-add").click(function() {
+						$.each($("#script-@scriptId-@{arg.getName()}-all option:selected"), function(i,e){
 							$(e).remove();
-							$(e).appendTo($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected"));
+							$(e).appendTo($("#script-@scriptId-@{arg.getName()}-selected"));
 						});
 					});
 					
 					/* Event handler for "remove"-button. */
-					$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-remove").click(function() {
-						$.each($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected option:selected"), function(i,e){
+					$("#script-@scriptId-@{arg.getName()}-remove").click(function() {
+						$.each($("#script-@scriptId-@{arg.getName()}-selected option:selected"), function(i,e){
 							$(e).remove();
 							if ($(e).hasClass("rightContentType"))
-								$(e).appendTo($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-suggested"));
+								$(e).appendTo($("#script-@scriptId-@{arg.getName()}-suggested"));
 							else
-								$(e).appendTo($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-other"));
+								$(e).appendTo($("#script-@scriptId-@{arg.getName()}-other"));
 							// TODO: instead of append; insert in sorted order according to fileName
 						});
 					});
 					
 					/* Event handler for fileset changes. */
-					Job.onNewUpload(function(fileset, id){
+					Job.onNewUpload(function(fileset){
 						var contentTypes = @Html(play.libs.Json.stringify(play.libs.Json.toJson(arg.getMediaTypes())));
 						for (var f = 0; f < fileset.length; f++) {
 							var file = fileset[f];
@@ -128,10 +128,10 @@
 							}
 							
 							if (matchingContentType) {
-								$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected").append($('<option class="rightContentType" value="upload'+id+'-file'+f+'" title="'+file.fileName+'">'+file.fileName+'</option>')
+								$("#script-@scriptId-@{arg.getName()}-selected").append($('<option class="rightContentType" value="'+file.fileName+'" title="'+file.fileName+'">'+file.fileName+'</option>')
 								);
 							} else {
-								$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-other").append($('<option class="wrongContentType" value="upload'+id+'-file'+f+'" title="'+file.fileName+'">'+file.fileName+'</option>')
+								$("#script-@scriptId-@{arg.getName()}-other").append($('<option class="wrongContentType" value="'+file.fileName+'" title="'+file.fileName+'">'+file.fileName+'</option>')
 								);
 							}
 							
@@ -142,10 +142,10 @@
 					/* Prepare form widget for validation and submission */
 					var beforeSubmit = function(){
 						var value = [];
-						$.each($("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-selected option"), function(i, e) {
+						$.each($("#script-@scriptId-@{arg.getName()}-selected option"), function(i, e) {
 							value.push($(e).attr("value"));
 						});
-						$('#script-@scriptId-@{arg.getKind()}-@{arg.getName()}').attr("value", value.join());
+						$('#script-@scriptId-@{arg.getName()}').attr("value", value.join());
 					}
 					DP2Forms.beforeSubmit("script-@scriptId",beforeSubmit);
 				});
@@ -156,12 +156,12 @@
 }else{
 	
 	<div class="control-group @("advanced-argument".when(!arg.getRequired()))">
-		<label class="control-label" for="@{arg.getKind()}-@{arg.getName()}">@arg.getNicename()</label>
+		<label class="control-label" for="@{arg.getName()}">@arg.getNicename()</label>
 		<div class="controls">
-			<select name="@{arg.getKind()}-@{arg.getName()}" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}">
+			<select name="@{arg.getName()}" id="script-@scriptId-@{arg.getName()}">
 				<option value="" selected=""></option>
-				<optgroup id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-suggested" label="Supported files"></optgroup>
-				<optgroup id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}-other" label="Other files"></optgroup>
+				<optgroup id="script-@scriptId-@{arg.getName()}-suggested" label="Supported files"></optgroup>
+				<optgroup id="script-@scriptId-@{arg.getName()}-other" label="Other files"></optgroup>
 			</select>
 			@if(arg.getDesc().length > 0){
 				<span class="help-block">@arg.getDesc()</span>
@@ -170,9 +170,10 @@
 			<script type="text/javascript">
 				$(function(){
 					/* Event handler for fileset changes. */
-					Job.onNewUpload(function(fileset, id){
+					Job.onNewUpload(function(fileset){
 						var contentTypes = @Html(play.libs.Json.stringify(play.libs.Json.toJson(arg.getMediaTypes())));
-						var selectedSomething = $("#script-@scriptId-@{arg.getKind()}-@{arg.getName()} optgroup option").filter(":selected").size() > 0;
+						var selectedSomething = $("#script-@scriptId-@{arg.getName()} optgroup option").filter(":selected").size() > 0;
+						console.log("file widget notified of new fileset: ", fileset);
 						for (var f = 0; f < fileset.length; f++) {
 							var file = fileset[f];
 							
@@ -200,12 +201,12 @@
 							
 							if (matchingContentType) {
 								if (!selectedSomething) {
-									$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-suggested").append($('<option class="rightContentType" value="upload'+id+'-file'+f+'" title="'+file.fileName+'" selected="">'+file.fileName+'</option>'));
+									$("#script-@scriptId-@{arg.getName()}-suggested").append($('<option class="rightContentType" value="'+file.fileName+'" title="'+file.fileName+'" selected="">'+file.fileName+'</option>'));
 								} else {
-									$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-suggested").append($('<option class="rightContentType" value="upload'+id+'-file'+f+'" title="'+file.fileName+'">'+file.fileName+'</option>'));
+									$("#script-@scriptId-@{arg.getName()}-suggested").append($('<option class="rightContentType" value="'+file.fileName+'" title="'+file.fileName+'">'+file.fileName+'</option>'));
 								}
 							} else {
-								$("#script-@scriptId-@{arg.getKind()}-@{arg.getName()}-other").append($('<option class="wrongContentType" value="upload'+id+'-file'+f+'" title="'+file.fileName+'">'+file.fileName+'</option>')
+								$("#script-@scriptId-@{arg.getName()}-other").append($('<option class="wrongContentType" value="'+file.fileName+'" title="'+file.fileName+'">'+file.fileName+'</option>')
 								);
 							}
 							
@@ -215,7 +216,7 @@
 					
 					/* Prepare and validate widget */
 					var validator = function(){
-						//TODO: validate #script-@scriptId-@{arg.getKind()}-@{arg.getName()}
+						//TODO: validate #script-@scriptId-@{arg.getName()}
 						
 						var result = {valid: true, messages: []};
 						

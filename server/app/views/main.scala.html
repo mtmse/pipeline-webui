@@ -132,6 +132,20 @@
 				</nav>
 			</div>
 		</div>
+		
+		<div id="engine-unavailable" role="alert" class="alert alert-error" style="display: none;"><span class="icon-exclamation-sign icon-whitex" aria-hidden="true"></span> Unable to communicate with the Pipeline 2 Engine.</div>
+		<script type="text/javascript">
+			$(function(){
+				var updateState = function(engineAvailable) {
+					if (engineAvailable) {
+						$("#engine-unavailable").hide();
+					} else {
+						$("#engine-unavailable").show();
+					}
+				};
+				Notifications.listen("heartbeat", updateState);
+			});
+		</script>
 	</div>
 	
 	<div class="container">

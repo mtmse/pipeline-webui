@@ -7,6 +7,7 @@ import java.io.IOException;
 
 import org.daisy.pipeline.client.http.WS;
 import org.daisy.pipeline.client.http.WSInterface;
+import org.daisy.pipeline.client.utils.Files;
 
 import controllers.Assets.Asset;
 import models.Notification;
@@ -65,6 +66,7 @@ public class Application extends Controller {
 			}
 			dp2dataDir.mkdirs();
 			dp2data = dp2dataDir.getCanonicalPath();
+			
 		} catch (IOException e) {
 			Logger.error("Could not get canonical path for "+dp2data, e);
 		}
@@ -113,7 +115,7 @@ public class Application extends Controller {
 		
 		File about = new File("about.html");
 		if (about.exists()) {
-			return ok(views.html.about.render(utils.Files.read(about)));
+			return ok(views.html.about.render(Files.read(about)));
 		} else {
 			return ok(views.html.about.render(null));
 		}
@@ -162,6 +164,7 @@ public class Application extends Controller {
 	}
 	
 	public static String themeName = null;
+
 	public static String themeName() {
 		if (themeName == null)
 			themeName = Setting.get("appearance.theme");

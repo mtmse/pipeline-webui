@@ -30,9 +30,9 @@
 }else{
 
 	<div class="control-group @("advanced-argument".when(!arg.getRequired()))">
-		<label class="control-label" for="@{arg.getKind()}-@{arg.getName()}">@arg.getNicename()</label>
+		<label class="control-label" for="@{arg.getName()}">@arg.getNicename()</label>
 		<div class="controls">
-			<input name="@{arg.getKind()}-@{arg.getName()}" id="script-@scriptId-@{arg.getKind()}-@{arg.getName()}" type="text"/>
+			<input name="@{arg.getName()}" id="script-@scriptId-@{arg.getName()}" type="text"/>
 			@if(arg.getDesc().length > 0){
 				<span class="help-block">@arg.getDesc()</span>
 			}

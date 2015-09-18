@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -13,43 +14,37 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import javax.management.RuntimeErrorException;
 
 import models.Job;
 import models.Notification;
 import models.NotificationConnection;
 import models.Setting;
-import models.Upload;
 import models.User;
 import models.UserSetting;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
-
-
-
-
-
-//import org.daisy.pipeline.client.Pipeline2WS;
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
-import org.daisy.pipeline.client.http.Pipeline2HttpClient;
-import org.daisy.pipeline.client.http.WS;
-import org.daisy.pipeline.client.http.WSResponse;
-import org.daisy.pipeline.client.utils.XPath;
-//import org.daisy.pipeline.client.models.Script;
-//import org.daisy.pipeline.client.models.script.Argument;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.daisy.pipeline.client.filestorage.JobStorage;
+import org.daisy.pipeline.client.models.Argument;
+import org.daisy.pipeline.client.models.Script;
+import org.daisy.pipeline.client.utils.Files;
 
 import play.Logger;
-import play.mvc.*;
+import play.libs.Akka;
+import play.mvc.Controller;
+import play.mvc.Http.MultipartFormData;
+import play.mvc.Http.MultipartFormData.FilePart;
+import play.mvc.Result;
+import scala.concurrent.duration.Duration;
+//import scala.actors.threadpool.Arrays;
 import utils.ContentType;
-import utils.Files;
-import views.html.defaultpages.error;
+import utils.FileInfo;
+import utils.XML;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 public class Jobs extends Controller {
 
@@ -62,9 +57,72 @@ public class Jobs extends Controller {
 		User user = User.authenticate(request(), session());
 		if (user == null)
 			return redirect(routes.Login.login());
+		
+		Job newJob = new Job(user);
+		newJob.save();
+		Logger.info("created new job: '"+newJob.id+"'");
+		newJob.asJob().getJobStorage().save();
+		Logger.info("job id after storage save: '"+newJob.id+"'");
+		JsonNode newJobJson = play.libs.Json.toJson(newJob);
+		Logger.info("job as json: "+newJobJson);
+		
+		return redirect(routes.Jobs.getJob(newJob.id));
+	}
+	
+	public static Result getScript(Long jobId, String scriptId) {
+		if (FirstUse.isFirstUse())
+			return redirect(routes.FirstUse.getFirstUse());
+		
+		User user = User.authenticate(request(), session());
+		if (user == null)
+			return redirect(routes.Login.login());
+		
+		if ("false".equals(UserSetting.get(-2L, "scriptEnabled-"+scriptId))) {
+			return forbidden();
+		}
+		
+		Script script = Scripts.get(scriptId);
+		
+		if (script == null) {
+			Logger.error("An error occured while trying to read the script with id '"+scriptId+"' from the engine.");
+			return internalServerError("An error occured while trying to read the script with id '"+scriptId+"' from the engine.");
+		}
+
+		/* List of mime types that are supported by more than one file argument.
+		 * The Web UI cannot automatically assign files of these media types to a
+		 * file argument since there are multiple possible file arguments/widgets. */
+		List<String> mediaTypeBlacklist = new ArrayList<String>();
+		{
+			Map<String,Integer> mediaTypeOccurences = new HashMap<String,Integer>();
+			for (Argument arg : script.getInputs()) {
+				for (String mediaType : arg.getMediaTypes()) {
+					if (mediaTypeOccurences.containsKey(mediaType)) {
+						mediaTypeOccurences.put(mediaType, mediaTypeOccurences.get(mediaType)+1);
+					} else {
+						mediaTypeOccurences.put(mediaType, 1);
+					}
+				}
+			}
+			for (String mediaType : mediaTypeOccurences.keySet()) {
+				if (mediaTypeOccurences.get(mediaType) > 1)
+					mediaTypeBlacklist.add(mediaType);
+			}
+		}
+
+		boolean uploadFiles = false;
+		boolean hideAdvancedOptions = "true".equals(Setting.get("jobs.hideAdvancedOptions"));
+		boolean hasAdvancedOptions = false;
+		for (Argument arg : script.getInputs()) {
+			if (arg.getRequired() != Boolean.TRUE) {
+				hasAdvancedOptions = true;
+			}
+			if ("anyFileURI".equals(arg.getType()) || "anyURI".equals(arg.getType()) || "anyDirURI".equals(arg.getType())) {
+				uploadFiles = true;
+			}
+		}
 
 		User.flashBrowserId(user);
-		return ok(views.html.Jobs.newJob.render(Application.pipeline2EngineAvailable()));
+		return ok(views.html.Jobs.getScript.render(script, script.getId().replaceAll(":", "\\x3A"), uploadFiles, hasAdvancedOptions, hideAdvancedOptions, mediaTypeBlacklist, jobId));
 	}
 	
 	public static Result getJobs() {
@@ -79,6 +137,23 @@ public class Jobs extends Controller {
 			flash("showOwner", "true");
 		flash("userid", user.id+"");
 		
+		List<Job> jobList;
+		if (user.admin) {
+			jobList = Job.find.all();
+			
+		} else if (user.id >= 0) {
+			jobList = Job.find.where().eq("user", user.id).findList();
+			
+		} else if (user.id < 0 && "true".equals(Setting.get("users.guest.shareJobs"))) {
+			jobList = Job.find.where().lt("user", 0).findList();
+			
+		} else {
+			jobList = new ArrayList<Job>();
+		}
+		
+		Collections.sort(jobList);
+		Collections.reverse(jobList);
+		
 		User.flashBrowserId(user);
 		return ok(views.html.Jobs.getJobs.render());
 	}
@@ -91,49 +166,28 @@ public class Jobs extends Controller {
 		if (user == null || (user.id < 0 && !"true".equals(Setting.get("users.guest.shareJobs"))))
 			return unauthorized("unauthorized");
 		
-		WSResponse jobs;
-		NodeList jobNodes;
 		List<Job> jobList;
-		/*try {
-			jobs = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"));
+		if (user.admin) {
+			jobList = Job.find.all();
 			
-			if (jobs.status != 200) {
-				Logger.error(jobs.status+": "+jobs.statusName+" - "+jobs.statusDescription+" : "+jobs.asText());
-				return internalServerError(jobs.statusDescription);
-			}
+		} else if (user.id >= 0) {
+			jobList = Job.find.where().eq("user", user.id).findList();
 			
-			jobNodes = XPath.selectNodes("//d:job", jobs.asXml(), Pipeline2WS.ns);
+		} else if (user.id < 0 && "true".equals(Setting.get("users.guest.shareJobs"))) {
+			jobList = Job.find.where().lt("user", 0).findList();
 			
+		} else {
 			jobList = new ArrayList<Job>();
-			for (int n = 0; n < jobNodes.getLength(); n++) {
-				Node jobNode = jobNodes.item(n);
-				
-				Job job = Job.findById(XPath.selectText("@id", jobNode, XPath.dp2ns));
-				if (job == null) {
-					Logger.warn("No job with id "+XPath.selectText("@id", jobNode, XPath.dp2ns)+" was found.");
-				} else {
-					job.href = XPath.selectText("@href", jobNode, XPath.dp2ns);
-					job.status = XPath.selectText("@status", jobNode, XPath.dp2ns);
-					if (user.admin || user.id >= 0 && user.id.equals(job.user) || user.id < 0 && job.user < 0 && "true".equals(Setting.get("users.guest.shareJobs"))) {
-						jobList.add(job);
-					}
-				}
-			}
-			
-		} catch (Pipeline2Exception e) {
-			Logger.error(e.getMessage(), e);
-			return internalServerError("A problem occured while communicating with the Pipeline engine");
-		}*/
+		}
 		
-//		Collections.sort(jobList);
-//		Collections.reverse(jobList);
+		Collections.sort(jobList);
+		Collections.reverse(jobList);
 		
-//		JsonNode jobsJson = play.libs.Json.toJson(jobList);
-//		return ok(jobsJson);
-		return null;
+		JsonNode jobsJson = play.libs.Json.toJson(jobList);
+		return ok(jobsJson);
 	}
 	
-	public static Result getJob(String id) {
+	public static Result getJob(Long id) {
 		if (FirstUse.isFirstUse())
 			return redirect(routes.FirstUse.getFirstUse());
 		
@@ -143,29 +197,9 @@ public class Jobs extends Controller {
 		
 		Logger.debug("getJob("+id+")");
 		
-		WSResponse response;
-		/*org.daisy.pipeline.client.models.Job job;
-		try {
-			Logger.debug("org.daisy.pipeline.client.Jobs.get ...");
-			response = org.daisy.pipeline.client.Jobs.get(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, null);
-			Logger.debug("org.daisy.pipeline.client.Jobs.get done");
-			
-			if (response.status != 200 && response.status != 201) {
-				return Application.error(response.status, response.statusName, response.statusDescription, response.asText());
-			}
-			
-			Logger.debug("new org.daisy.pipeline.client.models.Job ...");
-			job = new org.daisy.pipeline.client.models.Job(response.asXml());
-			Logger.debug("new org.daisy.pipeline.client.models.Job done");
-			
-		} catch (Pipeline2Exception e) {
-			Logger.error(e.getMessage(), e);
-			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
-		}
-		
-		Job webuiJob = Job.findById(job.id);
+		Job webuiJob = Job.findById(id);
 		if (webuiJob == null) {
-			Logger.debug("Job #"+job.id+" was not found.");
+			Logger.debug("Job #"+id+" was not found.");
 			return notFound("Sorry; something seems to have gone wrong. The job was not found.");
 		}
 		if (!(	user.admin
@@ -175,25 +209,16 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to view this job.");
 		}
 		
-		webuiJob.status = job.status.toString();
-		try {
-			webuiJob.messages = job.getMessagesAsList();
-		} catch (Pipeline2Exception e) {
-			return internalServerError(e.getMessage());
-		}
-//		if (!Job.lastMessageSequence.containsKey(job.id) && job.messages.size() > 0) {
-//			Collections.sort(job.messages);
-//			Job.lastMessageSequence.put(job.id, job.messages.get(job.messages.size()-1).sequence);
-//		}
-//		if (!Job.lastStatus.containsKey(job.id)) {
-//			Job.lastStatus.put(job.id, job.status);
-//		}
-		
 		User.flashBrowserId(user);
-		return ok(views.html.Jobs.getJob.render(job, webuiJob));*/ return null;
+		if (webuiJob.engineId == null) {
+			return ok(views.html.Jobs.newJob.render(webuiJob.id));
+			
+		} else {
+			return ok(views.html.Jobs.getJob.render(webuiJob));
+		}
 	}
 	
-	public static Result getJobJson(String id) {
+	public static Result getJobJson(Long id) {
 		if (FirstUse.isFirstUse())
 			return unauthorized("unauthorized");
 		
@@ -214,30 +239,21 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to view this job.");
 		}
 		
-		org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, 0);
+		org.daisy.pipeline.client.models.Job job = Application.ws.getJob(webuiJob.engineId, 0);
 		if (job == null) {
 			Logger.error("An error occured while fetching the job from the engine");
 			return internalServerError("An error occured while fetching the job from the engine");
 		}
 		
-		webuiJob.status = job.getStatus().toString();
-		try {
-			webuiJob.messages = job.getMessages();
-			
-		} catch (Pipeline2Exception e) {
-			return play.mvc.Results.internalServerError(e.getMessage());
-		}
-		Collections.sort(webuiJob.messages);
-		
-		JsonNode jobJson = play.libs.Json.toJson(webuiJob);
+		JsonNode jobJson = play.libs.Json.toJson(job);
 		return ok(jobJson);
 	}
 	
-	public static Result getAllResults(String id) {
+	public static Result getAllResults(Long id) {
 		return getResult(id, null);
 	}
 	
-	public static Result getResult(String id, String href) {
+	public static Result getResult(Long id, String href) {
 		if (FirstUse.isFirstUse())
 			return redirect(routes.FirstUse.getFirstUse());
 		
@@ -261,7 +277,7 @@ public class Jobs extends Controller {
 			
 			Logger.debug("href: "+(href==null?"[null]":href));
 			
-			org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, 0);
+			org.daisy.pipeline.client.models.Job job = Application.ws.getJob(webuiJob.engineId, 0);
 			org.daisy.pipeline.client.models.Result result = job.getResultFromHref(href);
 			File resultFile = result.asFile();
 			// org.daisy.pipeline.client.Jobs.getResultFromFile(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, href);
@@ -324,7 +340,7 @@ public class Jobs extends Controller {
 //		}
 	}
 
-	public static Result getLog(final String id) {
+	public static Result getLog(final Long id) {
 		if (FirstUse.isFirstUse())
 			return redirect(routes.FirstUse.getFirstUse());
 		
@@ -343,7 +359,7 @@ public class Jobs extends Controller {
 					))
 				return forbidden("You are not allowed to view this job.");
 		
-		String jobLog = Application.ws.getJobLog(id);
+		String jobLog = Application.ws.getJobLog(webuiJob.engineId);
 		//jobLog = org.daisy.pipeline.client.Jobs.getLog(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id);
 		
 		if (jobLog == null) {
@@ -358,230 +374,229 @@ public class Jobs extends Controller {
 		return ok(jobLog);
 	}
 
-    public static Result postJob() {
-		if (FirstUse.isFirstUse())
+    public static Result postJob(Long jobId) {
+		if (FirstUse.isFirstUse()) {
 			return redirect(routes.FirstUse.getFirstUse());
+		}
 
 		User user = User.authenticate(request(), session());
-		if (user == null)
+		if (user == null) {
 			return redirect(routes.Login.login());
+		}
 		
-		Logger.debug("------------------------------ Posting job... ------------------------------");
-
+		Job job = Job.findById(jobId);
+		if (job == null) {
+			return notFound("The job with ID='"+jobId+"' was not found.");
+		}
+		
+		if (job.user != user.id) {
+			return forbidden("You can only run your own jobs.");
+		}
+		
 		Map<String, String[]> params = request().body().asFormUrlEncoded();
 		if (params == null) {
-			return Application.error(500, "Internal Server Error", "Could not read form data", request().body().asText());
+			Logger.error("Could not read form data: "+request().body().asText());
+			return internalServerError("Could not read form data");
 		}
 
-		String id = params.get("id")[0];
-		
-		if ("false".equals(UserSetting.get(user.id, "scriptEnabled-"+id))) {
+		String scriptId = params.get("id")[0];
+		if ("false".equals(UserSetting.get(user.id, "scriptEnabled-"+scriptId))) {
 			return forbidden();
 		}
-
-		// Get a description of the script from Pipeline 2 Web API
-		WSResponse scriptResponse;
-		org.daisy.pipeline.client.models.Script script = Application.ws.getScript(id);
+		
+		Script script = Scripts.get(scriptId);
 		if (script == null) {
-			Logger.error("An error occured while trying to ready the script with id '"+id+"' from the engine.");
-			return Application.internalServerError("An error occured while trying to ready the script with id '"+id+"' from the engine.");
+			Logger.error("An error occured while trying to read the script with id '"+scriptId+"'.");
+			return Application.internalServerError("An error occured while trying to read the script with id '"+scriptId+"'.");
+		}
+		try {
+			script = new Script(script.toXml()); // create new instance of script
+			
+		} catch (Pipeline2Exception e) {
+			Logger.error("An error occured while trying to read the script with id '"+scriptId+"'.");
+			return Application.internalServerError("An error occured while trying to read the script with id '"+scriptId+"'.");
 		}
 		
+		org.daisy.pipeline.client.models.Job clientlibJob = job.asJob();
+		clientlibJob.setScript(script);
+		
+		for (String paramName : params.keySet()) {
+			String[] values = params.get(paramName);
+			Argument arg = script.getArgument(paramName);
+			if (arg != null) {
+				arg.clear();
+				for (String value : values) {
+					arg.add(value);
+				}
+			} else {
+				Logger.warn(paramName+" is not a valid argument for the script "+script.getNicename());
+			}
+		}
+
 		// Parse and validate the submitted form (also create any necessary output directories in case of local mode)
+		// TODO: see if clientlib can be used for validation instead
 		Scripts.ScriptForm scriptForm = new Scripts.ScriptForm(user.id, script, params);
 		String timeString = new Date().getTime()+"";
 		scriptForm.validate();
-
-		File contextZipFile = null;
-
-		if (scriptForm.uploads.size() > 0) {
-
-			// ---------- Create a temporary directory ("the context") ----------
-			File contextDir = null;
-			try {
-				contextDir = File.createTempFile("jobContext", "");
-
-				if (!(contextDir.delete())) {
-					Logger.error("Could not delete contextDir file: " + contextDir.getAbsolutePath());
-
-				} if (!(contextDir.mkdir())) {
-					Logger.error("Could not create contextDir directory: " + contextDir.getAbsolutePath());
-				}
-
-			} catch (IOException e) {
-				Logger.error("Could not create temporary context directory: "+e.getMessage(), e);
-				return internalServerError("Could not create temporary context directory");
-			}
-
-			Logger.debug("Created context directory: "+contextDir.getAbsolutePath());
-
-			// ---------- Copy or unzip all uploads to a common directory ----------
-			Logger.debug("number of uploads: "+scriptForm.uploads.size());
-			for (Long uploadId : scriptForm.uploads.keySet()) {
-				Upload upload = scriptForm.uploads.get(uploadId);
-				if (upload.isZip()) {
-					Logger.debug("unzipping "+upload.getFile()+" to contextDir");
-					try {
-						utils.Files.unzip(upload.getFile(), contextDir);
-					} catch (IOException e) {
-						Logger.error("Unable to unzip files into context directory.", e);
-						return Application.error(500, "Internal Server Error", "Unable to unzip uploaded ZIP file", "");
-					}
-				} else {
-					File from = upload.getFile();
-					File to = new File(contextDir, from.getName());
-					Logger.debug("copying "+from+" to "+to);
-					try {
-						utils.Files.copy(from, to); // We could do file.renameTo here to move it instead of making a copy, but copying makes it easier in case we need to re-run a job
-					} catch (IOException e) {
-						Logger.error("Unable to copy files to context directory.", e);
-						throw new RuntimeErrorException(new Error(e), "Unable to copy files to context directory.");
-					}
-				}
-			}
-			
-			/*if (Application.getAlive().localfs) {
-				Logger.debug("Running the Web UI and fwk on the same filesystem, no need to ZIP files...");
-				for (Argument arg : script.arguments) {
-					if (arg.output != null) {
-						Logger.debug(arg.name+" is output (\""+arg.output+"\"); don't resolve URI");
-						continue;
-					}
-					if ("anyFileURI".equals(arg.xsdType)) {
-						Logger.debug(arg.name+" is file(s); resolve URI(s)");
-						for (int i = 0; i < arg.size(); i++) {
-							arg.set(i, contextDir.toURI().resolve(Files.encodeURI(arg.get(i))));
-						}
-					}
-				}
-				
-			} else {
-				for (Argument arg : script.arguments) {
-					if (arg.output == null && "anyFileURI".equals(arg.xsdType)) {
-						Logger.debug(arg.name+" is file(s); resolve relative URI(s)");
-						for (int i = 0; i < arg.size(); i++) {
-							arg.set(i, new File(arg.get(i)).toURI().toString().substring(new File("").toURI().toString().length()));
-						}
-					}
-				}
-				
-				if (contextDir.list().length == 0) {
-					contextZipFile = null;
-				} else {
-					try {
-						contextZipFile = File.createTempFile("jobContext", ".zip");
-						Logger.debug("Created job context zip file: "+contextZipFile);
-					} catch (IOException e) {
-						Logger.error("Unable to create temporary job context ZIP file.", e);
-						throw new RuntimeErrorException(new Error(e), "Unable to create temporary job context ZIP file.");
-					}
-					try {
-						utils.Files.zip(contextDir, contextZipFile);
-					} catch (IOException e) {
-						Logger.error("Unable to zip context directory.", e);
-						throw new RuntimeErrorException(new Error(e), "Unable to zip context directory.");
-					}
-				}
-			}*/
-
+		
+		// TODO: consider enabling callbacks
+//		List<Callback> callbacks = new ArrayList<Callback>();
+//		callbacks.add(new Callback(routes.Callbacks.postCallback("messages").absoluteURL(request()), Callback.Type.messages, "1"));
+//		callbacks.add(new Callback(routes.Callbacks.postCallback("status").absoluteURL(request()), Callback.Type.status, "1"));
+//		clientlibJob.setCallback(callbacks);
+		
+		Logger.debug("------------------------------ Posting job... ------------------------------");
+		Logger.debug(XML.toString(clientlibJob.toJobRequestXml(true)));
+		clientlibJob = Application.ws.postJob(clientlibJob);
+		if (clientlibJob == null) {
+			Logger.error("An error occured when trying to post job");
+			return internalServerError("An error occured when trying to post job");
 		}
+		job.engineId = clientlibJob.getId();
+		job.status = "IDLE";
+		job.save();
 		
-		Map<String,String> callbacks = new HashMap<String,String>();
-//		if (play.Play.isDev()) { // TODO: only in dev for now
-//			callbacks.put("messages", routes.Callbacks.postCallback("messages").absoluteURL(request()));
-//			callbacks.put("status", routes.Callbacks.postCallback("status").absoluteURL(request()));
-//		}
+		NotificationConnection.push(job.user, new Notification("job-created-"+job.id, job.created.toString()));
 		
-		if (contextZipFile == null)
-			Logger.debug("No files in context, submitting job without context ZIP file");
-		else
-			Logger.debug("Context ZIP file is present, submitting job with context ZIP file");
-		
-		//WSResponse job;
-		String jobId;
-		org.daisy.pipeline.client.models.Job job = null; // TODO: populate job instead of setting it to null! new Job (script href, script arguments, job context, callbacks, etc.)
-//		try {
-			job = Application.ws.postJob(job, contextZipFile);
-//			job = org.daisy.pipeline.client.Jobs.post(
-//					Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"),
-//					scriptForm.script.href, scriptForm.script.arguments, contextZipFile, callbacks
-//			);
-			
-			if (job == null) {
-				Logger.error("An error occured when trying to post job");
-				Application.internalServerError("An error occured when trying to post job");
-			}
-			
-//			if (job.status != 200 && job.status != 201) {
-//				return Application.error(job.status, job.statusName, job.statusDescription, job.asText());
-//			}
-//			
-//			jobId = XPath.selectText("/*/@id", job.asXml(), Pipeline2WS.ns);
-			
-//		} catch (Pipeline2Exception e) {
-//			Logger.error(e.getMessage(), e);
-//			return Application.error(500, "Sorry, something unexpected occured", "A problem occured while communicating with the Pipeline engine", e.getMessage());
-//		}
-		
-		Job webUiJob = new Job(job.getId(), user);
-		webUiJob.nicename = id;
-		webUiJob.localDirName = timeString;
-		webUiJob.scriptId = script.getId();
-		webUiJob.scriptName = script.getNicename();
-		if (scriptForm.uploads != null && scriptForm.uploads.size() > 0) {
-			String filenames = "";
-			int i = 0;
-			for (Long uploadId : scriptForm.uploads.keySet()) {
-				if (i > 0)
-					filenames += ", ";
-				if (i++ >= 3) {
-					filenames += "...";
-					break;
-				}
-				filenames += scriptForm.uploads.get(uploadId).getFile().getName();
-			}
-			if (filenames.length() > 0)
-				webUiJob.nicename = filenames;
-		}
-		webUiJob.save();
-		NotificationConnection.push(webUiJob.user, new Notification("job-created-"+webUiJob.id, webUiJob.created.toString()));
-		for (Long uploadId : scriptForm.uploads.keySet()) {
-			// associate uploads with job
-			scriptForm.uploads.get(uploadId).job = job.getId();
-			scriptForm.uploads.get(uploadId).save();
-		}
-		
-		webUiJob.status = "IDLE";
-		
-		JsonNode jobJson = play.libs.Json.toJson(webUiJob);
+		JsonNode jobJson = play.libs.Json.toJson(job);
 		Notification jobNotification = new Notification("new-job", jobJson);
-		Logger.debug("pushed new-job notification with status=IDLE for job #"+job.getId());
-		NotificationConnection.pushJobNotification(webUiJob.user, jobNotification);
-		webUiJob.pushNotifications();
+		Logger.debug("pushed new-job notification with status=IDLE for job #"+jobId);
+		NotificationConnection.pushJobNotification(job.user, jobNotification);
+		job.pushNotifications();
 		
 		if (user.id < 0 && scriptForm.guestEmail != null && scriptForm.guestEmail.length() > 0) {
-			String jobUrl = Application.absoluteURL(routes.Jobs.getJob(job.getId()).absoluteURL(request())+"?guestid="+(models.User.parseUserId(session())!=null?-models.User.parseUserId(session()):""));
-			String html = views.html.Account.emailJobCreated.render(jobUrl, webUiJob.nicename).body();
+			String jobUrl = Application.absoluteURL(routes.Jobs.getJob(job.id).absoluteURL(request())+"?guestid="+(models.User.parseUserId(session())!=null?-models.User.parseUserId(session()):""));
+			String html = views.html.Account.emailJobCreated.render(jobUrl, job.nicename).body();
 			String text = "To view your Pipeline 2 job, go to this web address: " + jobUrl;
-			if (Account.sendEmail("Job created: "+webUiJob.nicename, html, text, scriptForm.guestEmail, scriptForm.guestEmail))
+			if (Account.sendEmail("Job created: "+job.nicename, html, text, scriptForm.guestEmail, scriptForm.guestEmail))
 				flash("success", "An e-mail was sent to "+scriptForm.guestEmail+" with a link to this job.");
 			else
 				flash("error", "Was unable to send an e-mail with a link to this job.");
 		}
 		
-		return redirect(controllers.routes.Jobs.getJob(job.getId()));
+		return redirect(controllers.routes.Jobs.getJob(job.id));
 	}
     
-    public static Result delete(String jobId) {
-    	Job job = Job.findById(jobId);
-    	if (job != null) {
-    		Logger.debug("deleting "+jobId);
-    		job.delete();
-    		return ok();
-    	} else {
-    		Logger.debug("no such job: "+jobId);
-    		return badRequest();
-    	}
+    public static Result delete(Long jobId) {
+		if (FirstUse.isFirstUse())
+			return unauthorized("unauthorized");
+		
+		User user = User.authenticate(request(), session());
+		if (user == null)
+			return unauthorized("unauthorized");
+		
+		Job webuiJob = Job.findById(jobId);
+		if (webuiJob == null) {
+			Logger.debug("Job #"+jobId+" was not found.");
+			return notFound("Sorry; something seems to have gone wrong. The job was not found.");
+		}
+		
+		if (!(	user.admin
+			||	webuiJob.user.equals(user.id)
+			||	webuiJob.user < 0 && user.id < 0 && "true".equals(Setting.get("users.guest.shareJobs"))
+			)) {
+			return forbidden("You are not allowed to view this job.");
+		}
+    	
+    	Logger.debug("deleting "+jobId);
+		webuiJob.delete();
+		return ok();
+    }
+    
+    public static Result upload(Long jobId) {
+		if (FirstUse.isFirstUse())
+			return forbidden();
+		
+		User user = User.authenticate(request(), session());
+		if (user == null)
+			return forbidden();
+		
+		Job webuiJob = Job.findById(jobId);
+		if (webuiJob == null) {
+			Logger.debug("Job #"+jobId+" was not found.");
+			return notFound("Sorry; something seems to have gone wrong. The job was not found.");
+		}
+		
+        MultipartFormData body = request().body().asMultipartFormData();
+        List<FilePart> files = body.getFiles();
+        
+        List<Map<String,Object>> filesResult = new ArrayList<Map<String,Object>>();
+        
+        for (FilePart file : files) {
+        	Logger.info(request().method()+" | "+file.getContentType()+" | "+file.getFilename()+" | "+file.getFile().getAbsolutePath());
+        	
+        	Map<String,Object> fileObject = new HashMap<String,Object>();
+        	fileObject.put("name", file.getFilename());
+        	fileObject.put("size", file.getFile().length());
+        	filesResult.add(fileObject);
+        	
+        	Akka.system().scheduler().scheduleOnce(
+    				Duration.create(0, TimeUnit.SECONDS),
+    				new Runnable() {
+    					public void run() {
+							JobStorage jobStorage = (JobStorage)webuiJob.asJob().getJobStorage();
+							File f = file.getFile();
+							if (file.getFilename().toLowerCase().endsWith(".zip")) {
+								Logger.info("adding zip file: "+file.getFilename());
+								try {
+									File tempDir = java.nio.file.Files.createTempFile("pipeline2-webui-upload", null).toFile();
+									tempDir.delete();
+									tempDir.mkdirs();
+									Files.unzip(f, tempDir);
+									Logger.info("zip file contains "+tempDir.listFiles().length+" files");
+									for (File dirFile : tempDir.listFiles()) {
+										Logger.info("top-level entry in zip: "+dirFile.getName());
+										jobStorage.addContextFile(dirFile, dirFile.getName());
+									}
+									
+								} catch (IOException e) {
+									Logger.error("Failed to unzip uploaded zip file", e);
+								}
+								
+							} else {
+								Logger.info("adding zip file: "+f.getName());
+								jobStorage.addContextFile(f, file.getFilename());
+							}
+				        	jobStorage.save(true); // true = move files instead of copying
+				        	try {
+				        		Map<String,Object> result = new HashMap<String,Object>();
+								result.put("fileName", file.getFilename());
+								result.put("contentType", file.getContentType());
+								result.put("total", file.getFile().length());
+								
+								List<Map<String,Object>> jsonFileset = new ArrayList<Map<String,Object>>();
+								
+								Map<String, File> files = Files.listFilesRecursively(jobStorage.getContextDir(), false);
+								for (String href : files.keySet()) {
+									Map<String,Object> fileResult = new HashMap<String,Object>();
+									String contentType = ContentType.probe(href, new FileInputStream(files.get(href)));
+									fileResult.put("fileName", href);
+									fileResult.put("contentType", contentType);
+									fileResult.put("total", files.get(href).length());
+									fileResult.put("isXML", contentType != null && (contentType.equals("application/xml") || contentType.equals("text/xml") || contentType.endsWith("+xml")));
+									jsonFileset.add(fileResult);
+								}
+								
+								result.put("fileset", jsonFileset);
+								
+								NotificationConnection.push(user.id, new Notification("uploads", result));
+								
+							} catch (IOException e) {
+								Logger.error("Failed to list unzipped files", e);
+							}
+    					}
+    				},
+    				Akka.system().dispatcher()
+    				);
+        	
+        }
+        
+        Map<String,List<Map<String,Object>>> result = new HashMap<String,List<Map<String,Object>>>();
+        result.put("files", filesResult);
+        
+		response().setContentType("text/html");
+		return ok(play.libs.Json.toJson(result));
+		
     }
 	
 }

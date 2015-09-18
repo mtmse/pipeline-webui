@@ -311,10 +311,10 @@ public class Administrator extends Controller {
 	
 	final static Form<ConfigureScripts> scriptsForm = play.data.Form.form(ConfigureScripts.class);
 	public static class ConfigureScripts {
-		public static Object scriptPermissions() {
+		/*public static Object scriptPermissions() {
 			Map<String,Boolean> scriptPermissions = new HashMap<String,Boolean>();
 			
-			List<Script> scripts = Application.ws.getScripts();
+			List<Script> scripts = Scripts.get();
 			if (scripts == null) {
 				Logger.error("Something bad happened, try refreshing the page or ask a technician for help");
 				return "Something bad happened, try refreshing the page or ask a technician for help";
@@ -330,7 +330,7 @@ public class Administrator extends Controller {
 			}
 			
 			return scriptPermissions;
-		}
+		}*/
 	}
 
 	final static Form<GlobalPermissions> globalForm = play.data.Form.form(GlobalPermissions.class);

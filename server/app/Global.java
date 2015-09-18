@@ -18,11 +18,13 @@ import java.util.concurrent.TimeUnit;
 
 
 
+
 //import org.daisy.pipeline.client.Pipeline2;
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
 import org.daisy.pipeline.client.http.WSResponse;
 //import org.daisy.pipeline.client.Pipeline2Logger;
+
 
 
 
@@ -143,22 +145,11 @@ public class Global extends GlobalSettings {
 				new Runnable() {
 					public void run() {
 						try {
-							// unused uploads are deleted after one hour
-							Date timeoutDate = new Date(new Date().getTime() - 600000L);
-							
-							List<Upload> uploads = Upload.find.all();
-							for (Upload upload : uploads) {
-								if (upload.job == null && NotificationConnection.getBrowser(upload.browserId) == null && upload.uploaded.before(timeoutDate)) {
-									Logger.info("Deleting old upload that is not open in any browser window: "+upload.id+(upload.getFile()!=null?" ("+upload.getFile().getName()+")":""));
-									upload.delete();
-								}
-							}
-							
 							// jobs are only deleted if that option is set in admin settings
 							if ("0".equals(Setting.get("jobs.deleteAfterDuration")))
 								return;
 							
-							timeoutDate = new Date(new Date().getTime() - Long.parseLong(Setting.get("jobs.deleteAfterDuration")));
+							Date timeoutDate = new Date(new Date().getTime() - Long.parseLong(Setting.get("jobs.deleteAfterDuration")));
 							
 							List<Job> jobs = Job.find.all();
 							for (Job job : jobs) {
@@ -195,19 +186,19 @@ public class Global extends GlobalSettings {
 							
 							List<Job> webUiJobs = Job.find.all();
 							
-							for (Job webUiJob : webUiJobs) {
-								boolean exists = false;
-								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
-									if (webUiJob.id.equals(engineJob.getId())) {
-										exists = true;
-										break;
-									}
-								}
-								if (!exists) {
-									Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
-									webUiJob.delete();
-								}
-							}
+//							for (Job webUiJob : webUiJobs) {
+//								boolean exists = false;
+//								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
+//									if (webUiJob.id.equals(engineJob.getId())) {
+//										exists = true;
+//										break;
+//									}
+//								}
+//								if (!exists) {
+//									Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
+//									webUiJob.delete();
+//								}
+//							}
 							
 							if (controllers.Application.getAlive() != null) {
 								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
@@ -220,7 +211,7 @@ public class Global extends GlobalSettings {
 									}
 									if (!exists) {
 										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+engineJob.getId());
-										Job webUiJob = new Job(engineJob);
+										Job webUiJob = new Job(engineJob, User.findById(-1L));
 										webUiJob.save();
 									}
 								}

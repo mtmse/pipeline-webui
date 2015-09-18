@@ -1,5 +1,7 @@
 package models;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -15,33 +17,28 @@ import javax.persistence.*;
 
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
-import org.daisy.pipeline.client.http.WSResponse;
-import org.daisy.pipeline.client.models.Message;
+import org.daisy.pipeline.client.filestorage.JobStorage;
 import org.daisy.pipeline.client.models.Job.Status;
 import org.daisy.pipeline.client.models.Result;
-import org.w3c.dom.Document;
+import org.daisy.pipeline.client.utils.Files;
 
 import controllers.Application;
 import akka.actor.Cancellable;
 import play.data.validation.*;
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
-import utils.XML;
 
 @Entity
 public class Job extends Model implements Comparable<Job> {
-	private static final long serialVersionUID = 1L;
-	
 	/** Key is the job ID; value is the sequence number of the last message read from the Pipeline 2 Web API. */ 
 	public static Map<String,Integer> lastMessageSequence = Collections.synchronizedMap(new HashMap<String,Integer>());
 	public static Map<String,org.daisy.pipeline.client.models.Job.Status> lastStatus = Collections.synchronizedMap(new HashMap<String,org.daisy.pipeline.client.models.Job.Status>());
 	
-	
 	@Id
-	@Constraints.Required
-	public String id;
+	public Long id;
 
 	// General information
+	public String engineId;
 	public String nicename;
 	public Date created;
 	public Date started;
@@ -51,6 +48,7 @@ public class Job extends Model implements Comparable<Job> {
 	public String localDirName;
 	public String scriptId;
 	public String scriptName;
+	public String status;
 	
 	// Notification flags
 	public boolean notifiedCreated;
@@ -60,20 +58,18 @@ public class Job extends Model implements Comparable<Job> {
 	@Transient
 	public String href;
 	@Transient
-	public String status;
-	@Transient
 	public String userNicename;
 	@Transient
-	public List<Message> messages;
+	org.daisy.pipeline.client.models.Job clientlibJob;
 
 	@Transient
 	private Cancellable pushNotifier;
 	
 	/** Make job belonging to user */
-	public Job(String id, User user) {
-		this.id = id;
+	public Job(User user) {
+		super();
 		this.user = user.id;
-		this.nicename = id;
+		this.nicename = "Job #"+id;
 		this.created = new Date();
 		this.notifiedCreated = false;
 		this.notifiedComplete = false;
@@ -84,24 +80,35 @@ public class Job extends Model implements Comparable<Job> {
 	}
 	
 	/** Make job from engine job */
-	public Job(org.daisy.pipeline.client.models.Job engineJob) {
-		this.id = engineJob.getId();
-		this.user = -1L;
-		this.nicename = engineJob.getScript().getId()+" (Command Line Interface)";
+	public Job(org.daisy.pipeline.client.models.Job job, User user) {
+		super();
+		this.engineId = job.getId();
+		this.user = user.id;
+		this.nicename = job.getNicename();
 		this.created = new Date();
 		this.notifiedCreated = false;
 		this.notifiedComplete = false;
-		this.userNicename = "Command Line Interface"; // could be something other than the CLI, but in 99% of the cases it will probably be the CLI
+		if (user.id < 0)
+			this.userNicename = Setting.get("users.guest.name");
+		else
+			this.userNicename = User.findById(user.id).name;
 		
-		if (!org.daisy.pipeline.client.models.Job.Status.IDLE.equals(engineJob.getStatus())) {
+		if (!org.daisy.pipeline.client.models.Job.Status.IDLE.equals(job.getStatus())) {
 			this.started = this.created;
-			if (!org.daisy.pipeline.client.models.Job.Status.RUNNING.equals(engineJob.getStatus())) {
+			if (!org.daisy.pipeline.client.models.Job.Status.RUNNING.equals(job.getStatus())) {
 				this.finished = this.started;
 			}
 		}
 		
-		this.scriptId = engineJob.getScript().getId();
-		this.scriptName = engineJob.getScript().getNicename();
+		this.scriptId = job.getScript().getId();
+		this.scriptName = job.getScript().getNicename();
+		
+		File jobDir = new File(new File(Setting.get("jobs")), job.getId());
+		try {
+			this.localDirName = jobDir.getCanonicalPath();
+		} catch (IOException e) {
+			this.localDirName = jobDir.getPath();
+		}
 	}
 
 	public int compareTo(Job other) {
@@ -110,11 +117,26 @@ public class Job extends Model implements Comparable<Job> {
 
 	// -- Queries
 
-	public static Model.Finder<String,Job> find = new Model.Finder<String, Job>(Job.class);
+	public static Model.Finder<Long,Job> find = new Model.Finder<Long, Job>(Job.class);
 
 	/** Retrieve a Job by its id. */
-	public static Job findById(String id) {
+	public static Job findById(Long id) {
 		Job job = find.where().eq("id", id).findUnique();
+		if (job != null) {
+			User user = User.findById(job.user);
+			if (user != null)
+				job.userNicename = user.name;
+			else if (job.user < 0)
+				job.userNicename = Setting.get("users.guest.name");
+			else
+				job.userNicename = "User";
+		}
+		return job;
+	}
+
+	/** Retrieve a Job by its engine id. */
+	public static Job findByEngineId(String id) {
+		Job job = find.where().eq("engine_id", id).findUnique();
 		if (job != null) {
 			User user = User.findById(job.user);
 			if (user != null)
@@ -140,13 +162,13 @@ public class Job extends Model implements Comparable<Job> {
 							Integer fromSequence = Job.lastMessageSequence.containsKey(id) ? Job.lastMessageSequence.get(id) : null;
 //							Logger.debug("checking job #"+id+" for updates from message #"+fromSequence);
 							
-							org.daisy.pipeline.client.models.Job job = Application.ws.getJob(id, fromSequence);
+							org.daisy.pipeline.client.models.Job job = Application.ws.getJob(engineId, fromSequence);
 							
 							if (job == null) {
 								return;
 							}
 							
-							Job webUiJob = Job.findById(job.getId());
+							Job webUiJob = Job.findByEngineId(job.getId());
 							
 							if (webUiJob == null) {
 								// Job has been deleted; stop updates
@@ -215,24 +237,32 @@ public class Job extends Model implements Comparable<Job> {
 				);
 	}
 	
-	public List<Upload> getUploads() {
-		return Upload.find.where().eq("job", id).findList();
-	}
-	
 	@Override
 	public void delete() {
 		Logger.debug("deleting "+this.id+" (sending DELETE request)");
-		boolean success = Application.ws.deleteJob(this.id);
+		boolean success = Application.ws.deleteJob(this.engineId);
 		if (!success) {
-			Pipeline2Logger.logger().error("An error occured when trying to delete job "+this.id+" from the Pipeline 2 Engine");
+			Pipeline2Logger.logger().error("An error occured when trying to delete job "+this.id+" ("+this.engineId+") from the Pipeline 2 Engine");
 		}
-		List<Upload> uploads = getUploads();
-		for (Upload upload : uploads)
-			upload.delete();
+		asJob().getJobStorage().delete();
 		super.delete();
 	}
 	
-	public void compile() {
-		
+//	public void compile() {
+//		
+//	}
+
+	public org.daisy.pipeline.client.models.Job asJob() {
+		if (clientlibJob == null) {
+			File jobStorageDir = new File(Setting.get("jobs"));
+			clientlibJob = JobStorage.loadJob(""+id, jobStorageDir);
+			if (clientlibJob == null) {
+				clientlibJob = new org.daisy.pipeline.client.models.Job();
+				clientlibJob.setNicename(nicename);
+				new JobStorage(clientlibJob, jobStorageDir, ""+id);
+			}
+		}
+		return clientlibJob;
 	}
+	
 }

@@ -1,4 +1,4 @@
-@(engineJob: org.daisy.pipeline.client.models.Job, uiJob: models.Job)
+@(uiJob: models.Job)
 
 @main("View job", "jobs", Array("createJob.js")) {
 
@@ -40,7 +40,7 @@
 				<td><strong>Job:</strong></td>
 				<td>
 					<strong id="nicename">@uiJob.nicename</strong><br/>
-					<small id="id" class="muted">@engineJob.getId()</small>
+					<small id="id" class="muted">@uiJob.id</small>
 				</td>
 			</tr>
 			<tr>
@@ -157,7 +157,7 @@
 	</div>
 	
 	<script type="text/javascript">
-		$("#status-@(engineJob.getStatus().toString().toLowerCase())").show();
+		$("#status-@(uiJob.status)").show();
 	</script>
 	
 	</div>
@@ -180,7 +180,7 @@
 <h2>Execution Log</h2>
 
 <br/>
-<a class="btn btn-info" href="@routes.Jobs.getLog(engineJob.getId())" target="_blank"><span class="icon-download-alt icon-white"></span> Download Detailed Log</a>
+<a class="btn btn-info" href="@routes.Jobs.getLog(uiJob.id)" target="_blank"><span class="icon-download-alt icon-white"></span> Download Detailed Log</a>
 <br/><br/>
 
 <p id="message-list-loading"><em>
@@ -212,7 +212,7 @@
 
 <script type="text/javascript">
 	$(function(){
-		Notifications.listen("job-message-@engineJob.getId()", function(message){
+		Notifications.listen("job-message-@uiJob.id", function(message){
 			var li = '<li id="m'+message.sequence+'" value="'+message.sequence+'"><span class="message '+(message.level=="ERROR"?"message-error":"")+(message.level=="WARNING"?"message-warn":"")+'">'+message.text+'</span></li>';
 			if ($("#m"+message.sequence).size() > 0) {
 				$("#m"+message.sequence).replaceWith(li);
@@ -230,19 +230,19 @@
 			$("#message-list").show();
 			$("#message-list-loading").hide();
 		});
-		Notifications.listen("job-status-@engineJob.getId()", function(status){
+		Notifications.listen("job-status-@uiJob.id", function(status){
 			@for(status <- org.daisy.pipeline.client.models.Job.Status.values()){
 				$("#status-@(status.toString().toLowerCase())").hide();
 			}
 			$("#status-"+status.toLowerCase()).show();
 		});
-		Notifications.listen("job-started-@engineJob.getId()", function(message){
+		Notifications.listen("job-started-@uiJob.id", function(message){
 			var date = new Date(parseInt(message.number));
 			$("#started").html(date+"");
 			clearInterval(updateFuzzyStartedInterval);
 			updateFuzzy("started-fuzzy", date);
 		});
-		Notifications.listen("job-finished-@engineJob.getId()", function(message){
+		Notifications.listen("job-finished-@uiJob.id", function(message){
 			var date = new Date(parseInt(message.number));
 			$("#finished").html(date+"");
 			clearInterval(updateFuzzyFinishedInterval);
@@ -259,7 +259,7 @@
 			}
 			
 			var fileLink = $("<a class=\"results-filename\"></a>");
-			$(fileLink).attr("href", "@routes.Jobs.getResult(engineJob.getId(),"")"+result.relativeHref.substring(7));
+			$(fileLink).attr("href", "@routes.Jobs.getResult(uiJob.id,"")"+result.relativeHref.substring(7));
 			$(fileLink).html(result.name!==null&&result.name.length>0?result.name:decodeURIComponent(result.filename.replace(/^idx\//,"")));
 			$(li).append(fileLink);
 			$(li).append(" ");
@@ -287,20 +287,20 @@
 				$(".results-buttons").empty();
 				$("#result-reports").empty();
 				
-				$("#results-download-all").append($("<a class=\"btn btn-success\" href=\""+"@routes.Jobs.getAllResults(engineJob.getId())"+"\"><span class=\"icon-download-alt icon-white\"></span> Download all results</a>"));
+				$("#results-download-all").append($("<a class=\"btn btn-success\" href=\""+"@routes.Jobs.getAllResults(uiJob.id)"+"\"><span class=\"icon-download-alt icon-white\"></span> Download all results</a>"));
 				for (i = 0; i < results.results.length; i++) {
 					if (results.results[i].results === null || results.results[i].results.length === 0 || results.results[i].results[0].mimeType.indexOf("application/vnd.pipeline") !== 0) {
 						$("#results-list").append(updateResultsList(results.results[i]));
 						if (results.results[i].results.length === 1 && results.results[i].results[0].results.length === 0) {
-							$(".results-buttons").append("<a class=\"btn btn-large btn-success\" href=\"@routes.Jobs.getResult(engineJob.getId(),"")"+results.results[i].results[0].relativeHref.substring(7)+"\"><span class=\"icon-download-alt icon-white\"></span> "+results.results[i].name+"</a> ");
+							$(".results-buttons").append("<a class=\"btn btn-large btn-success\" href=\"@routes.Jobs.getResult(uiJob.id,"")"+results.results[i].results[0].relativeHref.substring(7)+"\"><span class=\"icon-download-alt icon-white\"></span> "+results.results[i].name+"</a> ");
 						} else {
-							$(".results-buttons").append("<a class=\"btn btn-large btn-success\" href=\"@routes.Jobs.getResult(engineJob.getId(),"")"+results.results[i].relativeHref.substring(7)+"\"><span class=\"icon-download-alt icon-white\"></span> "+results.results[i].name+"</a> ");
+							$(".results-buttons").append("<a class=\"btn btn-large btn-success\" href=\"@routes.Jobs.getResult(uiJob.id,"")"+results.results[i].relativeHref.substring(7)+"\"><span class=\"icon-download-alt icon-white\"></span> "+results.results[i].name+"</a> ");
 						}
 					}
 					
 					for (j = 0; j < results.results[i].results.length; j++) {
 						if (results.results[i].results[j].mimeType==="application/vnd.pipeline.report+xml") {
-							href = "@routes.Jobs.getResult(engineJob.getId(),"")"+results.results[i].results[j].relativeHref.substring(7);
+							href = "@routes.Jobs.getResult(uiJob.id,"")"+results.results[i].results[j].relativeHref.substring(7);
 							$.ajax({
 								url: href+"?parse=report",
 								success: function(data, textStatus, jqXHR){
@@ -324,15 +324,11 @@
 				$("#results .results-nonempty").show();
 			}
 		};
-		Notifications.listen("job-results-@engineJob.getId()", updateResults);
-		@if(engineJob.getResult()!=null){
-			var results = @Html(play.libs.Json.toJson(engineJob.getResults()).toString());
-			updateResults(results);
-		}
+		Notifications.listen("job-results-@uiJob.id", updateResults);
 		
 		// Dynamically load page contents
 		$.ajax({
-			url: "@routes.Jobs.getJobJson(engineJob.getId())?"+new Date().getTime(),
+			url: "@routes.Jobs.getJobJson(uiJob.id)?"+new Date().getTime(),
 			error: function(jqXHR, textStatus, errorThrown) {
 				console.log("could not retrieve JSON for job", textStatus, errorThrown);
 				// error; too bad :(

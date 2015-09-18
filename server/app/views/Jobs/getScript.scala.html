@@ -1,4 +1,4 @@
-@(script: org.daisy.pipeline.client.models.Script, scriptId: String, uploadFiles: Boolean, hasAdvancedOptions: Boolean, hideAdvancedOptions: Boolean, mediaTypeBlacklist: List[String])
+@(script: org.daisy.pipeline.client.models.Script, scriptId: String, uploadFiles: Boolean, hasAdvancedOptions: Boolean, hideAdvancedOptions: Boolean, mediaTypeBlacklist: List[String], jobId: Long)
 
 
 <div id="script-@scriptId" data-fileinput="@uploadFiles">
@@ -13,7 +13,7 @@
 }
 </hgroup>
 
-<form action="@routes.Jobs.postJob().unique()" method="POST" id="script-@scriptId-form" class="form-horizontal" onsubmit="DP2Forms.prepareSubmission('script-@scriptId')">
+<form action="@routes.Jobs.postJob(jobId).unique()" method="POST" id="script-@scriptId-form" class="form-horizontal" onsubmit="DP2Forms.prepareSubmission('script-@scriptId')">
 	<input type="hidden" id="script-@scriptId-id" name="id" value="@script.getId()" />
 	<input type="hidden" id="script-@scriptId-uploads" name="uploads" value=""/>
 	<script type="text/javascript">
