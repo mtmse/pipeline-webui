@@ -186,36 +186,39 @@ public class Global extends GlobalSettings {
 							
 							List<Job> webUiJobs = Job.find.all();
 							
-//							for (Job webUiJob : webUiJobs) {
-//								boolean exists = false;
-//								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
-//									if (webUiJob.id.equals(engineJob.getId())) {
-//										exists = true;
-//										break;
-//									}
-//								}
-//								if (!exists) {
-//									Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
-//									webUiJob.delete();
-//								}
-//							}
+							for (Job webUiJob : webUiJobs) {
+								if (!"NEW".equals(webUiJob.status) && !"TEMPLATE".equals(webUiJob.status)) {
+									boolean exists = false;
+									for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
+										if (webUiJob.id.equals(engineJob.getId())) {
+											exists = true;
+											break;
+										}
+									}
+									if (!exists) {
+										Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
+										webUiJob.delete();
+									}
+								}
+							}
 							
 							if (controllers.Application.getAlive() != null) {
 								for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
 									boolean exists = false;
 									for (Job webUiJob : webUiJobs) {
-										if (engineJob.getId().equals(webUiJob.id)) {
+										if (engineJob.getId().equals(webUiJob.engineId)) {
 											exists = true;
 											break;
 										}
 									}
 									if (!exists) {
 										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+engineJob.getId());
-										Job webUiJob = new Job(engineJob, User.findById(-1L));
+										Job webUiJob = new Job(engineJob, User.findById(-1L)); // TODO: ensure that user with ID=-1 exists at this point
 										webUiJob.save();
 									}
 								}
 							}
+							
 						} catch (javax.persistence.PersistenceException e) {
 							// Ignores this exception that happens on shutdown:
 							// javax.persistence.PersistenceException: java.sql.SQLException: Attempting to obtain a connection from a pool that has already been shutdown.

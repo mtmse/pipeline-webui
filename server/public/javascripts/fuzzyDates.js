@@ -60,13 +60,19 @@ function updateFuzzy(id, date) {
 	if (0 <= delta && delta < 60000) {
 		for (var t = 1000; t < 60000; t += 1000) {
 			window.setTimeout(function(){
-				document.getElementById(id).innerHTML = fuzzyDate(new Date(date.getTime()));
+				var e = document.getElementById(id);
+				if (e !== undefined && e !== null) {
+					e.innerHTML = fuzzyDate(new Date(date.getTime()));
+				}
 			}, t);
 		}
 	}
 	
 	// every minute
 	return window.setInterval(function(){
-		document.getElementById(id).innerHTML = fuzzyDate(new Date(date.getTime()));
+		var e = document.getElementById(id);
+		if (e !== undefined && e !== null) {
+			e.innerHTML = fuzzyDate(new Date(date.getTime()));
+		}
 	}, 60000);
 }

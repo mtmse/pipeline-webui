@@ -4,35 +4,18 @@
 
 <hgroup>
 <h1>Jobs</h1>
-@if(session.get("admin")=="true"){
-	<script>
-		filterJobs = function(user) {
-		    if (user === 'all') {
-				$("#joblist tbody tr").show();
-				$("#showYourJobs").removeClass("active");
-				$("#showAllJobs").addClass("active");
-			} else {
-				$("#joblist tbody tr[data-user='"+user+"']").show();
-				$("#joblist tbody tr[data-user!='"+user+"']").hide();
-				$("#showAllJobs").removeClass("active");
-				$("#showYourJobs").addClass("active");
-			}
-		}
-	</script>
+@if(session.get("admin")=="true" || Setting.get("users.guest.shareJobs")=="true"){
 	<a id="showYourJobs" class="btn active" onclick="filterJobs(@Controller.flash("userid"));" href="javascript:void(0)">Your jobs</a>
 	<a id="showAllJobs" class="btn" onclick="filterJobs('all');" href="javascript:void(0)">All jobs</a>
-}else{
-@if(Setting.get("users.guest.shareJobs") == "true"){
-	<p>Displaying jobs for all guests</p>
-}else{
-	<p>Displaying your jobs</p>
-}}
+}
 </hgroup>
+<div role="alert" class="muted" style="width:100%;text-align:center;"><p id="filter-text"></p></div>
 
 <table id="joblist" class="table joblist" style="display:none;">
 	<thead>
 		<tr id="joblist-headline">
-			<th><img src="@routes.Assets.versioned("images/icon-info-sign.png")" alt="Status" title="Status"/></th>
+			<th>Status</th>
+			<th>Script</th>
 			<th>Job</th>
 			<!--<th>Results</th>-->
 			<th>Created</th>
@@ -46,19 +29,65 @@
 
 <script type="text/javascript">
 
+filterJobs = function(user) {
+	if (typeof user === 'undefined') {
+		if ($("#showAllJobs").hasClass("active")) {
+			user = 'all';
+		} else {
+			user = @Controller.flash("userid");
+		}
+	}
+    if (user === 'all') {
+		$("#joblist tbody tr").show();
+		$("#showYourJobs").removeClass("active");
+		$("#showAllJobs").addClass("active");
+		if ($("#joblist tbody tr").size() > 0) {
+			$("#filter-text").text("Displaying jobs for all users.");
+			$("#joblist-headline").show();
+		} else {
+			$("#filter-text").text("There are no jobs for any users.");
+			$("#joblist-headline").hide();
+		}
+	} else {
+		$("#joblist tbody tr[data-user='"+user+"']").show();
+		$("#joblist tbody tr[data-user!='"+user+"']").hide();
+		$("#showAllJobs").removeClass("active");
+		$("#showYourJobs").addClass("active");
+		if ($("#joblist tbody tr").size() > 0) {
+			$("#filter-text").text("Displaying your jobs.");
+			$("#joblist-headline").show();
+		} else {
+			$("#filter-text").text("You have no jobs.");
+			$("#joblist-headline").hide();
+		}
+	}
+}
+
 addJob = function(job) {
-	var i, statusText, html, visible;
-	statusText = job.status.charAt(0).toUpperCase() + job.status.slice(1).toLowerCase();
-	statusText = statusText.replace(/_/,' ');
+	var i, statusText, statusClass, html, visible;
+	console.log("adding job", job);
+	if (typeof job.status === "string") {
+		statusText = job.status.charAt(0).toUpperCase() + job.status.slice(1).toLowerCase();
+		statusText = statusText.replace(/_/,' ');
+		if (job.status === "DONE") {
+			statusClass = "success";
+		} else if (job.status === "ERROR" || job.status === "VALIDATION_FAIL") {
+			statusClass = "error";
+		} else if (job.status === "RUNNING") {
+			statusClass = "";
+		} else {
+			statusClass = "info";
+		}
+	} else {
+		statusText = "Unknown";
+		statusClass = "info";
+	}
 	visible = $("#showAllJobs").hasClass("active") || "@Controller.flash("userid")" === ""+job.user;
-	//console.log(visible, $("#showAllJobs").hasClass("active"),' || ',"@Controller.flash("userid")" === ""+job.user);
-	html = '<tr id="job-'+job.id+'" class="job" data-user="'+job.user+'"'+(!visible?' style="display:none;"':'')+'>'+"\n";
-	html += '    <td id="job-status-'+job.id+'">'+"\n";
-	html += '        <img src="@routes.Assets.versioned("images/")'+job.status+'.png" alt="'+statusText+'" title="'+statusText+'"/>'+"\n";
-	html += '    </td>'+"\n";
+	html = '<tr id="job-'+job.id+'" class="job '+statusClass+'" data-user="'+job.user+'"'+(!visible?' style="display:none;"':'')+'>'+"\n";
+	html += '    <td id="job-status-'+job.id+'">'+statusText+'</td>'+"\n";
+	html += '    <td>'+(typeof job.scriptName === "string" ? job.scriptName : "Unknown")+'</td>'+"\n";
 	html += '    <td>'+"\n";
-	html += '        <a href="@routes.Jobs.getJobs()/'+job.id+'">'+"\n";
-	html += '            '+job.nicename+' ('+job.scriptName+')<br/>'+"\n";
+	html += '        <a href="@routes.Jobs.getJobs()/'+job.id+'">'+job.nicename+'<br/>'+"\n";
 	html += '            <small class="muted">'+job.id+'</small>'+"\n";
 	html += '        </a>'+"\n";
 	html += '    </td>'+"\n";
@@ -103,11 +132,8 @@ addJob = function(job) {
 			$.ajax({
 				url: "@routes.Jobs.delete(-1L)".replace("-1",jobId),
 				success: function(data) {
-					$("#job-"+jobId).hide();
-					if ($("#joblist tbody tr").filter(":visible").size() === 0) {
-						$("#joblist").hide();
-						$("#nojobs").show();
-					} 
+					$("#job-"+jobId).remove();
+					filterJobs();
 				},
 				error: function() {
 					$("#job-delete-"+jobId).show();
@@ -117,7 +143,8 @@ addJob = function(job) {
 		});
 	});
 	
-	$("#nojobs").hide();
+	$("#nojobs-all").hide();
+	$("#nojobs-user").hide();
 	$("#joblist").show();
 	
 	updateFuzzy("created-"+job.id+"-fuzzy",new Date( job.created === null ? 999999999999999 : job.created ));
@@ -150,6 +177,7 @@ $(function(){
 			$.each(jobs.reverse(), function(j, job) {
 				addJob(job);
 			});
+			filterJobs();
 		}
 	});
 	
@@ -158,9 +186,5 @@ $(function(){
 	});
 });
 </script>
-
-<div id="nojobs" role="alert" class="muted" style="width:100%;text-align:center;display:none;">
-	<p>There are no jobs.</p>
-</div>
 
 }

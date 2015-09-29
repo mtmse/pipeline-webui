@@ -276,6 +276,7 @@
 		}
 		var updateResults = function(results){
 			var i, j, href;
+			console.log("updating results", results);
 			if (results.results === null || results.results.length === 0) {
 				$("#results .results-empty").show();
 				$("#results .results-nonempty").hide();

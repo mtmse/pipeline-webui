@@ -60,11 +60,8 @@ public class Jobs extends Controller {
 		
 		Job newJob = new Job(user);
 		newJob.save();
-		Logger.info("created new job: '"+newJob.id+"'");
-		newJob.asJob().getJobStorage().save();
-		Logger.info("job id after storage save: '"+newJob.id+"'");
 		JsonNode newJobJson = play.libs.Json.toJson(newJob);
-		Logger.info("job as json: "+newJobJson);
+		Logger.debug("created new job: '"+newJob.id+"'");
 		
 		return redirect(routes.Jobs.getJob(newJob.id));
 	}
@@ -210,7 +207,7 @@ public class Jobs extends Controller {
 		}
 		
 		User.flashBrowserId(user);
-		if (webuiJob.engineId == null) {
+		if ("NEW".equals(webuiJob.status)) {
 			return ok(views.html.Jobs.newJob.render(webuiJob.id));
 			
 		} else {
@@ -436,14 +433,7 @@ public class Jobs extends Controller {
 		// Parse and validate the submitted form (also create any necessary output directories in case of local mode)
 		// TODO: see if clientlib can be used for validation instead
 		Scripts.ScriptForm scriptForm = new Scripts.ScriptForm(user.id, script, params);
-		String timeString = new Date().getTime()+"";
 		scriptForm.validate();
-		
-		// TODO: consider enabling callbacks
-//		List<Callback> callbacks = new ArrayList<Callback>();
-//		callbacks.add(new Callback(routes.Callbacks.postCallback("messages").absoluteURL(request()), Callback.Type.messages, "1"));
-//		callbacks.add(new Callback(routes.Callbacks.postCallback("status").absoluteURL(request()), Callback.Type.status, "1"));
-//		clientlibJob.setCallback(callbacks);
 		
 		Logger.debug("------------------------------ Posting job... ------------------------------");
 		Logger.debug(XML.toString(clientlibJob.toJobRequestXml(true)));
@@ -452,7 +442,7 @@ public class Jobs extends Controller {
 			Logger.error("An error occured when trying to post job");
 			return internalServerError("An error occured when trying to post job");
 		}
-		job.engineId = clientlibJob.getId();
+		job.updateJob(clientlibJob);
 		job.status = "IDLE";
 		job.save();
 		
@@ -474,6 +464,7 @@ public class Jobs extends Controller {
 				flash("error", "Was unable to send an e-mail with a link to this job.");
 		}
 		
+		Logger.debug("return redirect(controllers.routes.Jobs.getJob("+job.id+"));");
 		return redirect(controllers.routes.Jobs.getJob(job.id));
 	}
     
@@ -523,7 +514,7 @@ public class Jobs extends Controller {
         List<Map<String,Object>> filesResult = new ArrayList<Map<String,Object>>();
         
         for (FilePart file : files) {
-        	Logger.info(request().method()+" | "+file.getContentType()+" | "+file.getFilename()+" | "+file.getFile().getAbsolutePath());
+        	Logger.debug(request().method()+" | "+file.getContentType()+" | "+file.getFilename()+" | "+file.getFile().getAbsolutePath());
         	
         	Map<String,Object> fileObject = new HashMap<String,Object>();
         	fileObject.put("name", file.getFilename());
@@ -537,15 +528,15 @@ public class Jobs extends Controller {
 							JobStorage jobStorage = (JobStorage)webuiJob.asJob().getJobStorage();
 							File f = file.getFile();
 							if (file.getFilename().toLowerCase().endsWith(".zip")) {
-								Logger.info("adding zip file: "+file.getFilename());
+								Logger.debug("adding zip file: "+file.getFilename());
 								try {
 									File tempDir = java.nio.file.Files.createTempFile("pipeline2-webui-upload", null).toFile();
 									tempDir.delete();
 									tempDir.mkdirs();
 									Files.unzip(f, tempDir);
-									Logger.info("zip file contains "+tempDir.listFiles().length+" files");
+									Logger.debug("zip file contains "+tempDir.listFiles().length+" files");
 									for (File dirFile : tempDir.listFiles()) {
-										Logger.info("top-level entry in zip: "+dirFile.getName());
+										Logger.debug("top-level entry in zip: "+dirFile.getName());
 										jobStorage.addContextFile(dirFile, dirFile.getName());
 									}
 									
@@ -554,7 +545,7 @@ public class Jobs extends Controller {
 								}
 								
 							} else {
-								Logger.info("adding zip file: "+f.getName());
+								Logger.debug("adding zip file: "+f.getName());
 								jobStorage.addContextFile(f, file.getFilename());
 							}
 				        	jobStorage.save(true); // true = move files instead of copying

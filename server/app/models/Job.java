@@ -2,31 +2,35 @@ package models;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
-import play.Logger;
-
-import com.avaje.ebean.*;
-
-import javax.persistence.*;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Transient;
 
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
 import org.daisy.pipeline.client.filestorage.JobStorage;
 import org.daisy.pipeline.client.models.Job.Status;
 import org.daisy.pipeline.client.models.Result;
-import org.daisy.pipeline.client.utils.Files;
 
-import controllers.Application;
-import akka.actor.Cancellable;
-import play.data.validation.*;
+import play.Logger;
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
+import akka.actor.Cancellable;
+
+import com.avaje.ebean.Model;
+
+import controllers.Application;
 
 @Entity
 public class Job extends Model implements Comparable<Job> {
@@ -69,7 +73,7 @@ public class Job extends Model implements Comparable<Job> {
 	public Job(User user) {
 		super();
 		this.user = user.id;
-		this.nicename = "Job #"+id;
+		this.status = "NEW";
 		this.created = new Date();
 		this.notifiedCreated = false;
 		this.notifiedComplete = false;
@@ -85,6 +89,7 @@ public class Job extends Model implements Comparable<Job> {
 		this.engineId = job.getId();
 		this.user = user.id;
 		this.nicename = job.getNicename();
+		this.status = job.getStatus()+"";
 		this.created = new Date();
 		this.notifiedCreated = false;
 		this.notifiedComplete = false;
@@ -155,24 +160,26 @@ public class Job extends Model implements Comparable<Job> {
 
 		pushNotifier = Akka.system().scheduler().schedule(
 				Duration.create(0, TimeUnit.SECONDS),
-				Duration.create(1000, TimeUnit.MILLISECONDS), // change to maybe every 10s if callbacks are activated
+				Duration.create(500, TimeUnit.MILLISECONDS), // change to maybe every 10s if callbacks are activated
 				new Runnable() {
 					public void run() {
 						try {
-							Integer fromSequence = Job.lastMessageSequence.containsKey(id) ? Job.lastMessageSequence.get(id) : null;
+							int fromSequence = Job.lastMessageSequence.containsKey(id) ? Job.lastMessageSequence.get(id) : 0;
 //							Logger.debug("checking job #"+id+" for updates from message #"+fromSequence);
 							
 							org.daisy.pipeline.client.models.Job job = Application.ws.getJob(engineId, fromSequence);
 							
 							if (job == null) {
+								Logger.debug("Could not find job in engine ("+engineId+")");
 								return;
 							}
 							
 							Job webUiJob = Job.findByEngineId(job.getId());
 							
 							if (webUiJob == null) {
-								// Job has been deleted; stop updates
+								Logger.debug("Job has been deleted; stop updates (engine id: "+job.getId()+")");
 								pushNotifier.cancel();
+								return;
 							}
 							
 							if (job.getStatus() != Status.RUNNING && job.getStatus() != Status.IDLE) {
@@ -184,16 +191,14 @@ public class Job extends Model implements Comparable<Job> {
 									Map<String,String> finishedMap = new HashMap<String,String>();
 									finishedMap.put("text", webUiJob.finished.toString());
 									finishedMap.put("number", webUiJob.finished.getTime()+"");
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-finished-"+job.getId(), finishedMap));
-									Map<Result,Map<Result,List<Result>>> results = new HashMap<Result,Map<Result,List<Result>>>();
-									results.put(job.getResult(), job.getResults());
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+job.getId(), results));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-finished-"+webUiJob.id, finishedMap));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+webUiJob.id, jsonifiableResults()));
 								}
 							}
 							
 							if (!job.getStatus().equals(lastStatus.get(job.getId()))) {
 								lastStatus.put(job.getId(), job.getStatus());
-								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+job.getId(), job.getStatus()));
+								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+webUiJob.id, job.getStatus()));
 								
 								webUiJob.status = job.getStatus().toString();
 								
@@ -203,7 +208,7 @@ public class Job extends Model implements Comparable<Job> {
 									Map<String,String> startedMap = new HashMap<String,String>();
 									startedMap.put("text", webUiJob.started.toString());
 									startedMap.put("number", webUiJob.started.getTime()+"");
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+job.getId(), startedMap));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+webUiJob.id, startedMap));
 								}
 								
 								webUiJob.save();
@@ -212,13 +217,15 @@ public class Job extends Model implements Comparable<Job> {
 							try {
 								List<org.daisy.pipeline.client.models.Message> messages = job.getMessages();
 								
-								for (org.daisy.pipeline.client.models.Message message : messages) {
-									Notification notification = new Notification("job-message-"+job.getId(), message);
-									NotificationConnection.pushJobNotification(webUiJob.user, notification);
-								}
-								
-								if (messages.size() > 0) {
-									Job.lastMessageSequence.put(job.getId(), messages.get(messages.size()-1).sequence);
+								if (messages != null) {
+									for (org.daisy.pipeline.client.models.Message message : messages) {
+										Notification notification = new Notification("job-message-"+webUiJob.id, message);
+										NotificationConnection.pushJobNotification(webUiJob.user, notification);
+									}
+									
+									if (messages.size() > 0) {
+										Job.lastMessageSequence.put(job.getId(), messages.get(messages.size()-1).sequence);
+									}
 								}
 								
 							} catch (Pipeline2Exception e) {
@@ -237,6 +244,62 @@ public class Job extends Model implements Comparable<Job> {
 				);
 	}
 	
+	public Object jsonifiableResults() {
+		org.daisy.pipeline.client.models.Job job = asJob();
+		Result allResults = job.getResult();
+		SortedMap<Result, List<Result>> individualResults = job.getResults();
+		
+		/*
+		Map<
+		    String,List<
+		        Map<
+		            String,List<
+		                Map<String,String>
+		            >
+		        >
+		    >
+		>
+		*/
+		
+		SortedMap<String,Object> jsonResults = new TreeMap<String,Object>();
+		if (allResults != null) {
+			jsonResults.put("filename", allResults.filename);
+			jsonResults.put("from", allResults.from);
+			jsonResults.put("mimeType", allResults.mimeType);
+			jsonResults.put("name", allResults.name);
+			jsonResults.put("relativeHref", allResults.relativeHref);
+			jsonResults.put("size", allResults.size);
+		}
+		List<Object> jsonResultResults = new ArrayList<Object>();
+		if (individualResults != null) {
+			for (Result individualResult : individualResults.keySet()) {
+				SortedMap<String,Object> jsonSubResults = new TreeMap<String,Object>();
+				jsonSubResults.put("filename", individualResult.filename);
+				jsonSubResults.put("from", individualResult.from);
+				jsonSubResults.put("mimeType", individualResult.mimeType);
+				jsonSubResults.put("name", individualResult.name);
+				jsonSubResults.put("relativeHref", individualResult.relativeHref);
+				jsonSubResults.put("size", individualResult.size);
+				List<Object> jsonSubResultResults = new ArrayList<Object>();
+				for (Result fileResult : individualResults.get(individualResult)) {
+					SortedMap<String,Object> jsonSubSubResults = new TreeMap<String,Object>();
+					jsonSubSubResults.put("filename", fileResult.filename);
+					jsonSubSubResults.put("from", fileResult.from);
+					jsonSubSubResults.put("mimeType", fileResult.mimeType);
+					jsonSubSubResults.put("name", fileResult.name);
+					jsonSubSubResults.put("relativeHref", fileResult.relativeHref);
+					jsonSubSubResults.put("size", fileResult.size);
+					jsonSubResultResults.add(jsonSubSubResults);
+				}
+				jsonSubResults.put("results", jsonSubResultResults);
+				jsonResultResults.add(jsonSubResults);
+			}
+		}
+		jsonResults.put("results", jsonResultResults);
+		
+		return jsonResults;
+	}
+
 	@Override
 	public void delete() {
 		Logger.debug("deleting "+this.id+" (sending DELETE request)");
@@ -248,9 +311,48 @@ public class Job extends Model implements Comparable<Job> {
 		super.delete();
 	}
 	
-//	public void compile() {
-//		
-//	}
+	@Override
+	public void save() {
+		// save to job storage as well
+		org.daisy.pipeline.client.models.Job engineJob = asJob();
+		engineJob.getJobStorage().save();
+		if (engineId == null) {
+			engineId = engineJob.getId();
+		}
+		if (nicename == null) {
+			nicename = engineJob.getNicename();
+		}
+		if (scriptId == null && engineJob.getScript() != null) {
+			scriptId = engineJob.getScript().getId();
+		}
+		if (scriptName == null && engineJob.getScript() != null) {
+			scriptName = engineJob.getScript().getNicename();
+		}
+		try {
+			// if current status is one of the build-in types
+			// (i.e. not "NEW", "UNDEFINED", "TEMPLATE" or anything else used only by the Web UI)
+			// then get the status from the engine.
+			if (Status.valueOf(status) != null) {
+				status = engineJob.getStatus()+"";
+			}
+		}
+		catch (IllegalArgumentException e) {}
+		catch (NullPointerException e) {}
+		
+		super.save();
+
+		// refresh id after save
+		if (this.id == null) {
+			Job job = null;
+			job = Job.find.where().eq("created", this.created).eq("user_id", this.user).findUnique();
+			if (job != null) {
+				this.id = job.id;
+				if (job.nicename == null) {
+					this.nicename = "Job #"+job.id;
+				}
+			}
+		}
+	}
 
 	public org.daisy.pipeline.client.models.Job asJob() {
 		if (clientlibJob == null) {
@@ -261,8 +363,27 @@ public class Job extends Model implements Comparable<Job> {
 				clientlibJob.setNicename(nicename);
 				new JobStorage(clientlibJob, jobStorageDir, ""+id);
 			}
+			updateJob(clientlibJob);
 		}
 		return clientlibJob;
+	}
+	
+	public void updateJob(org.daisy.pipeline.client.models.Job clientlibJob) {
+		clientlibJob.setId(clientlibJob.getId());
+		clientlibJob.setJobStorage(this.clientlibJob.getJobStorage());
+		this.clientlibJob = clientlibJob;
+		if (engineId == null) {
+			engineId = clientlibJob.getId();
+		}
+		if (nicename == null) {
+			nicename = clientlibJob.getNicename();
+		}
+		if (scriptId == null && clientlibJob.getScript() != null) {
+			scriptId = clientlibJob.getScript().getId();
+		}
+		if (scriptName == null && clientlibJob.getScript() != null) {
+			scriptName = clientlibJob.getScript().getNicename();
+		}
 	}
 	
 }
