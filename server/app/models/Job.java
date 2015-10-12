@@ -169,7 +169,12 @@ public class Job extends Model implements Comparable<Job> {
 		}
 		return userNicename;
 	}
-
+	
+	public void cancelPushNotifications() {
+		if (pushNotifier != null)
+			pushNotifier.cancel();
+	}
+	
 	public void pushNotifications() {
 		if (pushNotifier != null)
 			return;
@@ -406,11 +411,17 @@ public class Job extends Model implements Comparable<Job> {
 		if (job.getId() != null) {
 		    clientlibJob.setId(job.getId());
 		}
+		if (job.getHref() != null) {
+		    clientlibJob.setHref(job.getHref());
+		}
 		if (job.getStatus() != null) {
 		    clientlibJob.setStatus(job.getStatus());
 		}
 		if (job.getPriority() != null) {
 		    clientlibJob.setPriority(job.getPriority());
+		}
+		if (job.getLogHref() != null) {
+		    clientlibJob.setLogHref(job.getLogHref());
 		}
 		if (job.getMessages() != null) {
 		    clientlibJob.setMessages(job.getMessages());
@@ -431,14 +442,8 @@ public class Job extends Model implements Comparable<Job> {
 		if (clientlibJob.getOutputs() == null && job.getOutputs() != null) {
 		    clientlibJob.setOutputs(job.getOutputs());
 		}
-		if (clientlibJob.getHref() == null && job.getHref() != null) {
-		    clientlibJob.setHref(job.getHref());
-		}
 		if (clientlibJob.getScriptHref() == null && job.getScriptHref() != null) {
 		    clientlibJob.setScriptHref(job.getScriptHref());
-		}
-		if (clientlibJob.getLogHref() == null && job.getLogHref() != null) {
-		    clientlibJob.setLogHref(job.getLogHref());
 		}
 		if (clientlibJob.getScript() == null && job.getScript() != null) {
 		    clientlibJob.setScript(job.getScript());
@@ -460,6 +465,9 @@ public class Job extends Model implements Comparable<Job> {
 			return null;
 		}
 		org.daisy.pipeline.client.models.Job clientlibJob = Application.ws.getJob(engineId, fromSequence);
+		if (clientlibJob == null) {
+			return null;
+		}
 		synchronized (this) {
 			int messages;
 			messages = clientlibJob.getMessages() != null ? clientlibJob.getMessages().size() : -2;

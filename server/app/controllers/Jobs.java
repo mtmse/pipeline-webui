@@ -67,6 +67,58 @@ public class Jobs extends Controller {
 		return redirect(routes.Jobs.getJob(newJob.id));
 	}
 	
+	public static Result restart(Long jobId) {
+		if (FirstUse.isFirstUse())
+			return redirect(routes.FirstUse.getFirstUse());
+		
+		User user = User.authenticate(request(), session());
+		if (user == null)
+			return redirect(routes.Login.login());
+		
+		Logger.debug("restart("+jobId+")");
+		
+		Job webuiJob = Job.findById(jobId);
+		if (webuiJob == null) {
+			Logger.debug("Job #"+jobId+" was not found.");
+			return notFound("Sorry; something seems to have gone wrong. The job was not found.");
+		}
+		if (!(	user.admin
+			||	webuiJob.user.equals(user.id)
+			||	webuiJob.user < 0 && user.id < 0 && "true".equals(Setting.get("users.guest.shareJobs"))
+				)) {
+			return forbidden("You are not allowed to restart this job.");
+		}
+		
+		if (webuiJob.engineId != null) {
+			Application.ws.deleteJob(webuiJob.engineId);
+			webuiJob.engineId = null;
+		}
+		
+		webuiJob.status = "NEW";
+		webuiJob.notifiedComplete = false;
+		org.daisy.pipeline.client.models.Job clientlibJob = webuiJob.asJob();
+		webuiJob.save();
+		
+		Logger.info("------------------------------ Posting job... ------------------------------");
+		Logger.info(XML.toString(clientlibJob.toJobRequestXml(true)));
+		clientlibJob = Application.ws.postJob(clientlibJob);
+		if (clientlibJob == null) {
+			Logger.error("An error occured when trying to post job");
+			return internalServerError("An error occured when trying to post job");
+		}
+		webuiJob.setJob(clientlibJob);
+		webuiJob.status = "IDLE";
+		webuiJob.save();
+		
+		NotificationConnection.pushJobNotification(webuiJob.user, new Notification("job-status-"+webuiJob.id, org.daisy.pipeline.client.models.Job.Status.IDLE));
+		webuiJob.cancelPushNotifications();
+		webuiJob.pushNotifications();
+		
+		User.flashBrowserId(user);
+		Logger.debug("return redirect(controllers.routes.Jobs.getJob("+webuiJob.id+"));");
+		return redirect(controllers.routes.Jobs.getJob(webuiJob.id));
+	}
+	
 	public static Result getScript(Long jobId, String scriptId) {
 		if (FirstUse.isFirstUse())
 			return redirect(routes.FirstUse.getFirstUse());

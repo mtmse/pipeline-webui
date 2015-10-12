@@ -35,6 +35,7 @@ GET		/jobs/:id/result/*href              controllers.Jobs.getResult(id: Long, hr
 GET		/jobs/:id/result                    controllers.Jobs.getAllResults(id: Long)
 GET		/jobs/:id/log                       controllers.Jobs.getLog(id: Long)
 GET		/jobs/:id/delete                    controllers.Jobs.delete(id: Long)
+GET		/jobs/:id/restart                   controllers.Jobs.restart(id: Long)
 GET		/jobs/:id.json						controllers.Jobs.getJobJson(id: Long)
 GET		/jobs/:id							controllers.Jobs.getJob(id: Long)
 GET     /jobs.json                          controllers.Jobs.getJobsJson()
