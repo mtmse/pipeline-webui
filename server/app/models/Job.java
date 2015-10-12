@@ -20,12 +20,17 @@ import javax.persistence.Transient;
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
 import org.daisy.pipeline.client.filestorage.JobStorage;
+import org.daisy.pipeline.client.models.Job.Priority;
 import org.daisy.pipeline.client.models.Job.Status;
+import org.daisy.pipeline.client.models.Callback;
+import org.daisy.pipeline.client.models.Message;
 import org.daisy.pipeline.client.models.Result;
+import org.daisy.pipeline.client.models.Script;
 
 import play.Logger;
 import play.libs.Akka;
 import scala.concurrent.duration.Duration;
+import utils.XML;
 import akka.actor.Cancellable;
 
 import com.avaje.ebean.Model;
@@ -36,7 +41,7 @@ import controllers.Application;
 public class Job extends Model implements Comparable<Job> {
 	/** Key is the job ID; value is the sequence number of the last message read from the Pipeline 2 Web API. */ 
 	public static Map<String,Integer> lastMessageSequence = Collections.synchronizedMap(new HashMap<String,Integer>());
-	public static Map<String,org.daisy.pipeline.client.models.Job.Status> lastStatus = Collections.synchronizedMap(new HashMap<String,org.daisy.pipeline.client.models.Job.Status>());
+	public static Map<String,String> lastStatus = Collections.synchronizedMap(new HashMap<String,String>());
 	
 	@Id
 	public Long id;
@@ -62,7 +67,7 @@ public class Job extends Model implements Comparable<Job> {
 	@Transient
 	public String href;
 	@Transient
-	public String userNicename;
+	private String userNicename;
 	@Transient
 	org.daisy.pipeline.client.models.Job clientlibJob;
 
@@ -153,6 +158,17 @@ public class Job extends Model implements Comparable<Job> {
 		}
 		return job;
 	}
+	
+	/** The nice name of the user that owns this job */
+	public String getUserNicename() {
+		if (userNicename == null) {
+			if (user == null || user < 0)
+				userNicename = Setting.get("users.guest.name");
+			else
+				userNicename = User.findById(user).name;
+		}
+		return userNicename;
+	}
 
 	public void pushNotifications() {
 		if (pushNotifier != null)
@@ -160,14 +176,14 @@ public class Job extends Model implements Comparable<Job> {
 
 		pushNotifier = Akka.system().scheduler().schedule(
 				Duration.create(0, TimeUnit.SECONDS),
-				Duration.create(500, TimeUnit.MILLISECONDS), // change to maybe every 10s if callbacks are activated
+				Duration.create(500, TimeUnit.MILLISECONDS),
 				new Runnable() {
 					public void run() {
 						try {
 							int fromSequence = Job.lastMessageSequence.containsKey(id) ? Job.lastMessageSequence.get(id) : 0;
 //							Logger.debug("checking job #"+id+" for updates from message #"+fromSequence);
 							
-							org.daisy.pipeline.client.models.Job job = Application.ws.getJob(engineId, fromSequence);
+							org.daisy.pipeline.client.models.Job job = getJobFromEngine(fromSequence);
 							
 							if (job == null) {
 								Logger.debug("Could not find job in engine ("+engineId+")");
@@ -187,50 +203,47 @@ public class Job extends Model implements Comparable<Job> {
 								if (webUiJob.finished == null) {
 									// pushNotifier tends to fire multiple times after canceling it, so this if{} is just to fire the "finished" event exactly once
 									webUiJob.finished = new Date();
-									webUiJob.save();
 									Map<String,String> finishedMap = new HashMap<String,String>();
 									finishedMap.put("text", webUiJob.finished.toString());
 									finishedMap.put("number", webUiJob.finished.getTime()+"");
 									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-finished-"+webUiJob.id, finishedMap));
-									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+webUiJob.id, jsonifiableResults()));
+									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-results-"+webUiJob.id, jsonifiableResults(job)));
 								}
 							}
 							
-							if (!job.getStatus().equals(lastStatus.get(job.getId()))) {
-								lastStatus.put(job.getId(), job.getStatus());
+							if (job.getStatus() != null && !job.getStatus().toString().equals(lastStatus.get(job.getId()))) {
+								Logger.debug("    status has changed to "+job.getStatus());
+								lastStatus.put(job.getId(), job.getStatus().toString());
+								Logger.debug("    notifying job-status-"+webUiJob.id);
 								NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-status-"+webUiJob.id, job.getStatus()));
 								
 								webUiJob.status = job.getStatus().toString();
 								
 								if (job.getStatus() == Status.RUNNING) {
 									// job status changed from IDLE to RUNNING
+									Logger.debug("    job status changed from IDLE to RUNNING");
 									webUiJob.started = new Date();
 									Map<String,String> startedMap = new HashMap<String,String>();
 									startedMap.put("text", webUiJob.started.toString());
 									startedMap.put("number", webUiJob.started.getTime()+"");
+									Logger.debug("    notifying job-started-"+webUiJob.id);
 									NotificationConnection.pushJobNotification(webUiJob.user, new Notification("job-started-"+webUiJob.id, startedMap));
 								}
 								
+								Logger.debug("    saving");
 								webUiJob.save();
 							}
 							
-							try {
-								List<org.daisy.pipeline.client.models.Message> messages = job.getMessages();
-								
-								if (messages != null) {
-									for (org.daisy.pipeline.client.models.Message message : messages) {
-										Notification notification = new Notification("job-message-"+webUiJob.id, message);
-										NotificationConnection.pushJobNotification(webUiJob.user, notification);
-									}
-									
-									if (messages.size() > 0) {
-										Job.lastMessageSequence.put(job.getId(), messages.get(messages.size()-1).sequence);
-									}
+							List<org.daisy.pipeline.client.models.Message> messages = job.getMessages();
+							if (messages != null) {
+								for (org.daisy.pipeline.client.models.Message message : messages) {
+									Notification notification = new Notification("job-message-"+webUiJob.id, message);
+									NotificationConnection.pushJobNotification(webUiJob.user, notification);
 								}
 								
-							} catch (Pipeline2Exception e) {
-								Logger.error("An error occured while trying to parse the job messages for job "+job.getId(), e);
-								e.printStackTrace();
+								if (messages.size() > 0) {
+									Job.lastMessageSequence.put(job.getId(), messages.get(messages.size()-1).sequence);
+								}
 							}
 							
 						} catch (javax.persistence.PersistenceException e) {
@@ -244,22 +257,9 @@ public class Job extends Model implements Comparable<Job> {
 				);
 	}
 	
-	public Object jsonifiableResults() {
-		org.daisy.pipeline.client.models.Job job = asJob();
+	public static Object jsonifiableResults(org.daisy.pipeline.client.models.Job job) {
 		Result allResults = job.getResult();
 		SortedMap<Result, List<Result>> individualResults = job.getResults();
-		
-		/*
-		Map<
-		    String,List<
-		        Map<
-		            String,List<
-		                Map<String,String>
-		            >
-		        >
-		    >
-		>
-		*/
 		
 		SortedMap<String,Object> jsonResults = new TreeMap<String,Object>();
 		if (allResults != null) {
@@ -267,7 +267,9 @@ public class Job extends Model implements Comparable<Job> {
 			jsonResults.put("from", allResults.from);
 			jsonResults.put("mimeType", allResults.mimeType);
 			jsonResults.put("name", allResults.name);
+			jsonResults.put("nicename", allResults.nicename);
 			jsonResults.put("relativeHref", allResults.relativeHref);
+			jsonResults.put("prettyRelativeHref", allResults.prettyRelativeHref);
 			jsonResults.put("size", allResults.size);
 		}
 		List<Object> jsonResultResults = new ArrayList<Object>();
@@ -278,7 +280,9 @@ public class Job extends Model implements Comparable<Job> {
 				jsonSubResults.put("from", individualResult.from);
 				jsonSubResults.put("mimeType", individualResult.mimeType);
 				jsonSubResults.put("name", individualResult.name);
+				jsonSubResults.put("nicename", individualResult.nicename);
 				jsonSubResults.put("relativeHref", individualResult.relativeHref);
+				jsonSubResults.put("prettyRelativeHref", individualResult.prettyRelativeHref);
 				jsonSubResults.put("size", individualResult.size);
 				List<Object> jsonSubResultResults = new ArrayList<Object>();
 				for (Result fileResult : individualResults.get(individualResult)) {
@@ -287,7 +291,9 @@ public class Job extends Model implements Comparable<Job> {
 					jsonSubSubResults.put("from", fileResult.from);
 					jsonSubSubResults.put("mimeType", fileResult.mimeType);
 					jsonSubSubResults.put("name", fileResult.name);
+					jsonSubSubResults.put("nicename", fileResult.nicename);
 					jsonSubSubResults.put("relativeHref", fileResult.relativeHref);
+					jsonSubSubResults.put("prettyRelativeHref", fileResult.prettyRelativeHref);
 					jsonSubSubResults.put("size", fileResult.size);
 					jsonSubResultResults.add(jsonSubSubResults);
 				}
@@ -316,62 +322,29 @@ public class Job extends Model implements Comparable<Job> {
 		// save to job storage as well
 		org.daisy.pipeline.client.models.Job engineJob = asJob();
 		engineJob.getJobStorage().save();
-		if (engineId == null) {
-			engineId = engineJob.getId();
-		}
-		if (nicename == null) {
-			nicename = engineJob.getNicename();
-		}
-		if (scriptId == null && engineJob.getScript() != null) {
-			scriptId = engineJob.getScript().getId();
-		}
-		if (scriptName == null && engineJob.getScript() != null) {
-			scriptName = engineJob.getScript().getNicename();
-		}
-		try {
-			// if current status is one of the build-in types
-			// (i.e. not "NEW", "UNDEFINED", "TEMPLATE" or anything else used only by the Web UI)
-			// then get the status from the engine.
-			if (Status.valueOf(status) != null) {
-				status = engineJob.getStatus()+"";
-			}
-		}
-		catch (IllegalArgumentException e) {}
-		catch (NullPointerException e) {}
+		jobUpdateHelper();
 		
-		super.save();
-
-		// refresh id after save
-		if (this.id == null) {
-			Job job = null;
-			job = Job.find.where().eq("created", this.created).eq("user_id", this.user).findUnique();
-			if (job != null) {
-				this.id = job.id;
-				if (job.nicename == null) {
-					this.nicename = "Job #"+job.id;
+		synchronized (this) {
+			super.save();
+			
+			if (id == null) {
+				id = (Long) Job.find.orderBy("id desc").findIds().get(0);
+				if (nicename == null) {
+					nicename = "Job #"+id;
+					super.save();
 				}
 			}
 		}
+		
+		synchronized (this) {
+			int messages;
+			messages = clientlibJob.getMessages() != null ? clientlibJob.getMessages().size() : -2;
+			Logger.debug("saved (with "+messages+" messages):");
+			Logger.debug(XML.toString(clientlibJob.toXml()));
+		}
 	}
 
-	public org.daisy.pipeline.client.models.Job asJob() {
-		if (clientlibJob == null) {
-			File jobStorageDir = new File(Setting.get("jobs"));
-			clientlibJob = JobStorage.loadJob(""+id, jobStorageDir);
-			if (clientlibJob == null) {
-				clientlibJob = new org.daisy.pipeline.client.models.Job();
-				clientlibJob.setNicename(nicename);
-				new JobStorage(clientlibJob, jobStorageDir, ""+id);
-			}
-			updateJob(clientlibJob);
-		}
-		return clientlibJob;
-	}
-	
-	public void updateJob(org.daisy.pipeline.client.models.Job clientlibJob) {
-		clientlibJob.setId(clientlibJob.getId());
-		clientlibJob.setJobStorage(this.clientlibJob.getJobStorage());
-		this.clientlibJob = clientlibJob;
+	private void jobUpdateHelper() {
 		if (engineId == null) {
 			engineId = clientlibJob.getId();
 		}
@@ -384,6 +357,118 @@ public class Job extends Model implements Comparable<Job> {
 		if (scriptName == null && clientlibJob.getScript() != null) {
 			scriptName = clientlibJob.getScript().getNicename();
 		}
+		try {
+			// if current status is one of the build-in types
+			// (i.e. not "NEW", "UNDEFINED", "TEMPLATE" or anything else used only by the Web UI)
+			// then get the status from the engine.
+			if (Status.valueOf(status) != null) {
+				status = clientlibJob.getStatus()+"";
+			}
+		}
+		catch (IllegalArgumentException e) {}
+		catch (NullPointerException e) {}
+	}
+
+	public org.daisy.pipeline.client.models.Job asJob() {
+		if (clientlibJob == null) {
+			Logger.debug("getting client job (not cached from earlier)");
+			File jobStorageDir = new File(Setting.get("jobs"));
+			clientlibJob = JobStorage.loadJob(""+id, jobStorageDir);
+			if (clientlibJob == null) {
+				Logger.debug("not found in job storage");
+				getJobFromEngine(0);
+				if (clientlibJob != null) {
+					Logger.debug("got job from engine; setting job storage based on id");
+					new JobStorage(clientlibJob, jobStorageDir, ""+id);
+					if (clientlibJob.getNicename() == null) {
+						Logger.debug("setting client nicename to "+nicename);
+						clientlibJob.setNicename(nicename);
+					}
+				}
+			} else Logger.debug("found in job storage");
+			if (clientlibJob == null) {
+				Logger.debug("not found in engine or storage; job is a new job");
+				clientlibJob = new org.daisy.pipeline.client.models.Job();
+				Logger.debug("setting job storage based on id");
+				clientlibJob.setNicename(nicename);
+				new JobStorage(clientlibJob, jobStorageDir, ""+id);
+			}
+			setJob(clientlibJob);
+		}
+		return clientlibJob;
+	}
+	
+	public void setJob(org.daisy.pipeline.client.models.Job job) {
+		if (clientlibJob == null) {
+			clientlibJob = asJob();
+		}
+		
+		if (job.getId() != null) {
+		    clientlibJob.setId(job.getId());
+		}
+		if (job.getStatus() != null) {
+		    clientlibJob.setStatus(job.getStatus());
+		}
+		if (job.getPriority() != null) {
+		    clientlibJob.setPriority(job.getPriority());
+		}
+		if (job.getMessages() != null) {
+		    clientlibJob.setMessages(job.getMessages());
+		}
+		
+		if (clientlibJob.getBatchId() == null && job.getBatchId() != null) {
+			clientlibJob.setBatchId(job.getBatchId());
+		}
+		if (clientlibJob.getCallback() == null && job.getCallback() != null) {
+		    clientlibJob.setCallback(job.getCallback());
+		}
+		if (clientlibJob.getNicename() == null && job.getNicename() != null) {
+		    clientlibJob.setNicename(job.getNicename());
+		}
+		if (clientlibJob.getInputs() == null && job.getInputs() != null) {
+		    clientlibJob.setInputs(job.getInputs());
+		}
+		if (clientlibJob.getOutputs() == null && job.getOutputs() != null) {
+		    clientlibJob.setOutputs(job.getOutputs());
+		}
+		if (clientlibJob.getHref() == null && job.getHref() != null) {
+		    clientlibJob.setHref(job.getHref());
+		}
+		if (clientlibJob.getScriptHref() == null && job.getScriptHref() != null) {
+		    clientlibJob.setScriptHref(job.getScriptHref());
+		}
+		if (clientlibJob.getLogHref() == null && job.getLogHref() != null) {
+		    clientlibJob.setLogHref(job.getLogHref());
+		}
+		if (clientlibJob.getScript() == null && job.getScript() != null) {
+		    clientlibJob.setScript(job.getScript());
+		}
+		if (clientlibJob.getScript() == null || job.getScript() != null && !clientlibJob.getScript().getId().equals(job.getScript().getId())) {
+			if (job.getScript() != null) {
+				clientlibJob.setScript(Application.ws.getScript(job.getScript().getId()));
+				clientlibJob.setInputs(clientlibJob.getInputs());
+			    clientlibJob.setOutputs(clientlibJob.getOutputs());
+			}
+		}
+		
+		jobUpdateHelper();
+	}
+
+	/** Use this method to get the job from the engine to ensure that the XML in the webuis job storage is always up to date */
+	public org.daisy.pipeline.client.models.Job getJobFromEngine(int fromSequence) {
+		if (engineId == null) {
+			return null;
+		}
+		org.daisy.pipeline.client.models.Job clientlibJob = Application.ws.getJob(engineId, fromSequence);
+		synchronized (this) {
+			int messages;
+			messages = clientlibJob.getMessages() != null ? clientlibJob.getMessages().size() : -2;
+			Logger.debug("received (with "+messages+" messages):");
+			Logger.debug(XML.toString(clientlibJob.toXml()));
+		}
+		setJob(clientlibJob);
+		save();
+		return clientlibJob;
 	}
 	
 }

@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.text.DateFormat;
@@ -211,7 +212,7 @@ public class Jobs extends Controller {
 			return ok(views.html.Jobs.newJob.render(webuiJob.id));
 			
 		} else {
-			return ok(views.html.Jobs.getJob.render(webuiJob));
+			return ok(views.html.Jobs.getJob.render(webuiJob.id));
 		}
 	}
 	
@@ -236,13 +237,18 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to view this job.");
 		}
 		
-		org.daisy.pipeline.client.models.Job job = Application.ws.getJob(webuiJob.engineId, 0);
-		if (job == null) {
+		org.daisy.pipeline.client.models.Job engineJob = webuiJob.getJobFromEngine(0);
+		if (engineJob == null) {
 			Logger.error("An error occured while fetching the job from the engine");
 			return internalServerError("An error occured while fetching the job from the engine");
 		}
 		
-		JsonNode jobJson = play.libs.Json.toJson(job);
+		Map<String,Object> output = new HashMap<String,Object>();
+		output.put("webuiJob", webuiJob);
+		output.put("engineJob", engineJob);
+		output.put("results", Job.jsonifiableResults(engineJob));
+		
+		JsonNode jobJson = play.libs.Json.toJson(output);
 		return ok(jobJson);
 	}
 	
@@ -270,17 +276,47 @@ public class Jobs extends Controller {
 				return forbidden("You are not allowed to view this job.");
 		
 //		try {
-			Logger.info("retrieving result from Pipeline 2 engine...");
+			Logger.debug("retrieving result from Pipeline 2 engine...");
 			
 			Logger.debug("href: "+(href==null?"[null]":href));
 			
-			org.daisy.pipeline.client.models.Job job = Application.ws.getJob(webuiJob.engineId, 0);
-			org.daisy.pipeline.client.models.Result result = job.getResultFromHref(href);
-			File resultFile = result.asFile();
-			// org.daisy.pipeline.client.Jobs.getResultFromFile(Setting.get("dp2ws.endpoint"), Setting.get("dp2ws.authid"), Setting.get("dp2ws.secret"), id, href);
+			org.daisy.pipeline.client.models.Job job = webuiJob.getJobFromEngine(0);
 			
+			if (href != null && href.length() > 0) {
+				href = job.getHref() + "/result/" + href;
+			}
+			
+			org.daisy.pipeline.client.models.Result result = job.getResultFromHref(href);
+			if (result == null) {
+				return badRequest("Could not find result: "+href);
+			}
+			
+			String filename;
+			if (result.filename != null) {
+				filename = result.filename;
+				
+			} else if (result.href != null) {
+				filename = result.href.replaceFirst("^.*/([^/]*)$", "$1");
+				
+			} else {
+				if ("application/zip".equals(result.mimeType) || result.from != null) {
+					filename = id+".zip";
+					
+				} else {
+					filename = id+"";
+				}
+			}
+			response().setHeader("Content-Disposition", "attachment; filename=\""+filename+"\"");
+			
+			File resultFile = result.asFile();
 			if (resultFile == null || !resultFile.exists()) {
-				return badRequest("Unable to retrieve file.");
+				Logger.debug("Result file does not exist on disk; request directly from engine...");
+				
+				resultFile = Application.ws.getJobResultAsFile(job.getId(), href);
+			}
+			
+			if (resultFile == null) {
+				return badRequest("Result not found: "+href);
 			}
 			
 			try {
@@ -301,15 +337,6 @@ public class Jobs extends Controller {
 				Logger.debug("content size unknown (size="+size+")");
 			}
 			
-			String filename;
-			if (href == null)
-				filename = id+".zip";
-			else if (href.matches("^[^/]*/[^/]*/idx/.*$"))
-				filename = href.replaceFirst("^.*/([^/]*)$", "$1");
-			else
-				filename = id+"-"+href.replaceFirst("^[^/]*/([^/]*)/?.*?$", "$1")+".zip";
-			response().setHeader("Content-Disposition", "attachment; filename=\""+filename);
-			
 			String parse = request().getQueryString("parse");
 			if ("report".equals(parse)) {
 				response().setContentType("text/html");
@@ -320,7 +347,7 @@ public class Jobs extends Controller {
 				if (regexMatcher.find()) {
 					body = regexMatcher.group(1);
 				} else {
-					Logger.info("no body element found in report; returning the entire report");
+					Logger.debug("no body element found in report; returning the entire report");
 					body = report;
 				}
 				final byte[] utf8Bytes = body.getBytes(StandardCharsets.UTF_8);
@@ -345,6 +372,8 @@ public class Jobs extends Controller {
 		if (user == null)
 			return redirect(routes.Login.login());
 		
+		response().setHeader("Content-Disposition", "attachment; filename=\"job-"+id+".log\"");
+		
 		Job webuiJob = Job.findById(id);
 		if (webuiJob == null) {
 			Logger.debug("Job #"+id+" was not found.");
@@ -367,7 +396,7 @@ public class Jobs extends Controller {
 		if (jobLog.length() == 0) {
 			return ok("The log is empty.");
 		}
-
+		
 		return ok(jobLog);
 	}
 
@@ -422,8 +451,12 @@ public class Jobs extends Controller {
 			Argument arg = script.getArgument(paramName);
 			if (arg != null) {
 				arg.clear();
-				for (String value : values) {
-					arg.add(value);
+				if (values.length == 1 && "".equals(values[0])) {
+					// don't add value; treat empty strings as unset values
+				} else {
+					for (String value : values) {
+						arg.add(value);
+					}
 				}
 			} else {
 				Logger.warn(paramName+" is not a valid argument for the script "+script.getNicename());
@@ -442,7 +475,7 @@ public class Jobs extends Controller {
 			Logger.error("An error occured when trying to post job");
 			return internalServerError("An error occured when trying to post job");
 		}
-		job.updateJob(clientlibJob);
+		job.setJob(clientlibJob);
 		job.status = "IDLE";
 		job.save();
 		
@@ -527,6 +560,12 @@ public class Jobs extends Controller {
     					public void run() {
 							JobStorage jobStorage = (JobStorage)webuiJob.asJob().getJobStorage();
 							File f = file.getFile();
+							
+							Map<String,Object> result = new HashMap<String,Object>();
+							result.put("fileName", file.getFilename());
+							result.put("contentType", file.getContentType());
+							result.put("total", file.getFile().length());
+							
 							if (file.getFilename().toLowerCase().endsWith(".zip")) {
 								Logger.debug("adding zip file: "+file.getFilename());
 								try {
@@ -534,6 +573,20 @@ public class Jobs extends Controller {
 									tempDir.delete();
 									tempDir.mkdirs();
 									Files.unzip(f, tempDir);
+									
+									List<Map<String,Object>> jsonFileset = new ArrayList<Map<String,Object>>();
+									Map<String, File> files = Files.listFilesRecursively(tempDir, false);
+									for (String href : files.keySet()) {
+										Map<String,Object> fileResult = new HashMap<String,Object>();
+										String contentType = ContentType.probe(href, new FileInputStream(files.get(href)));
+										fileResult.put("fileName", href);
+										fileResult.put("contentType", contentType);
+										fileResult.put("total", files.get(href).length());
+										fileResult.put("isXML", contentType != null && (contentType.equals("application/xml") || contentType.equals("text/xml") || contentType.endsWith("+xml")));
+										jsonFileset.add(fileResult);
+									}
+									result.put("fileset", jsonFileset);
+									
 									Logger.debug("zip file contains "+tempDir.listFiles().length+" files");
 									for (File dirFile : tempDir.listFiles()) {
 										Logger.debug("top-level entry in zip: "+dirFile.getName());
@@ -546,35 +599,28 @@ public class Jobs extends Controller {
 								
 							} else {
 								Logger.debug("adding zip file: "+f.getName());
+								
+								List<Map<String,Object>> jsonFileset = new ArrayList<Map<String,Object>>();
+								Map<String,Object> fileResult = new HashMap<String,Object>();
+								String contentType;
+								try {
+									contentType = ContentType.probe(file.getFilename(), new FileInputStream(f));
+								} catch (FileNotFoundException e) {
+									contentType = "application/octet-stream";
+								}
+								fileResult.put("fileName", file.getFilename());
+								fileResult.put("contentType", contentType);
+								fileResult.put("total", f.length());
+								fileResult.put("isXML", contentType != null && (contentType.equals("application/xml") || contentType.equals("text/xml") || contentType.endsWith("+xml")));
+								jsonFileset.add(fileResult);
+								result.put("fileset", jsonFileset);
+								
 								jobStorage.addContextFile(f, file.getFilename());
 							}
 				        	jobStorage.save(true); // true = move files instead of copying
-				        	try {
-				        		Map<String,Object> result = new HashMap<String,Object>();
-								result.put("fileName", file.getFilename());
-								result.put("contentType", file.getContentType());
-								result.put("total", file.getFile().length());
-								
-								List<Map<String,Object>> jsonFileset = new ArrayList<Map<String,Object>>();
-								
-								Map<String, File> files = Files.listFilesRecursively(jobStorage.getContextDir(), false);
-								for (String href : files.keySet()) {
-									Map<String,Object> fileResult = new HashMap<String,Object>();
-									String contentType = ContentType.probe(href, new FileInputStream(files.get(href)));
-									fileResult.put("fileName", href);
-									fileResult.put("contentType", contentType);
-									fileResult.put("total", files.get(href).length());
-									fileResult.put("isXML", contentType != null && (contentType.equals("application/xml") || contentType.equals("text/xml") || contentType.endsWith("+xml")));
-									jsonFileset.add(fileResult);
-								}
-								
-								result.put("fileset", jsonFileset);
-								
-								NotificationConnection.push(user.id, new Notification("uploads", result));
-								
-							} catch (IOException e) {
-								Logger.error("Failed to list unzipped files", e);
-							}
+				        	
+				        	Logger.info("uploads result object: "+result);
+							NotificationConnection.push(user.id, new Notification("uploads", result));
     					}
     				},
     				Akka.system().dispatcher()

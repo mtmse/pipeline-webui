@@ -63,25 +63,39 @@ filterJobs = function(user) {
 	}
 }
 
-addJob = function(job) {
-	var i, statusText, statusClass, html, visible;
-	console.log("adding job", job);
-	if (typeof job.status === "string") {
-		statusText = job.status.charAt(0).toUpperCase() + job.status.slice(1).toLowerCase();
-		statusText = statusText.replace(/_/,' ');
-		if (job.status === "DONE") {
-			statusClass = "success";
-		} else if (job.status === "ERROR" || job.status === "VALIDATION_FAIL") {
-			statusClass = "error";
-		} else if (job.status === "RUNNING") {
-			statusClass = "";
+jobStatusText = function(string) {
+	if (typeof string === "string") {
+		statusText = string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+		return statusText.replace(/_/,' ');
+	} else {
+		return "Unknown";
+	}
+}
+
+jobStatusClass = function(string) {
+	if (typeof string === "string") {
+		if (string === "DONE") {
+			return "success";
+		} else if (string === "ERROR" || string === "VALIDATION_FAIL") {
+			return "error";
+		} else if (string === "RUNNING") {
+			return "info";
 		} else {
-			statusClass = "info";
+			return "";
 		}
 	} else {
-		statusText = "Unknown";
-		statusClass = "info";
+		return "info";
 	}
+}
+
+addJob = function(job) {
+	var i, statusText, statusClass, html, visible;
+	if (job.status === "NEW") {
+		return;
+	}
+	console.log("adding job", job);
+	statusText = jobStatusText(job.status);
+	statusClass = jobStatusClass(job.status);
 	visible = $("#showAllJobs").hasClass("active") || "@Controller.flash("userid")" === ""+job.user;
 	html = '<tr id="job-'+job.id+'" class="job '+statusClass+'" data-user="'+job.user+'"'+(!visible?' style="display:none;"':'')+'>'+"\n";
 	html += '    <td id="job-status-'+job.id+'">'+statusText+'</td>'+"\n";
@@ -150,8 +164,10 @@ addJob = function(job) {
 	updateFuzzy("created-"+job.id+"-fuzzy",new Date( job.created === null ? 999999999999999 : job.created ));
 	
 	Notifications.listen("job-status-"+job.id, function(status, id){
-		var statusText = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-		$("#job-status-"+id).html('<img src="@routes.Assets.versioned("images/")'+status+'.png" alt="'+statusText+'" title="'+statusText+'"/>');
+		var statusText = jobStatusText(status);
+		var statusClass = jobStatusClass(status);
+		$("#job-status-"+id).html(statusText);
+		$("#job-"+id).attr("class", "job "+statusClass);
 		/*if (status==="DONE" || status==="VALIDATION_FAIL") {
 			//$("#job-results-"+id).html(' <span><a class="btn btn-mini btn-success" href="'+'@@routes.Jobs.getResult(-1L,"")'.replace('-1',id)+'"><i class="icon-download-alt icon-white"></i> Download</a></span>');
 			$("#job-results-"+id).html(' <span><a class="btn btn-mini btn-success" href="#"><i class="icon-download-alt icon-white"></i> Download</a></span>');

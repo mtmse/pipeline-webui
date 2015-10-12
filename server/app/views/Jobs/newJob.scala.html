@@ -201,16 +201,29 @@ h2 {
 			firstFileOrScriptChosen = null;
 		}
 		Job.onFilesetTypeUpdate(function(filesetTypes){
-			var types = "";
+			console.log("Job.onFilesetTypeUpdate", filesetTypes);
+			var types, typesString;
+			
+			types = [];
 			for (var id in filesetTypes) {
 				var fs = filesetTypes[id];
-				if (types.length > 0) types = types + ", ";
-				types = types + fs.name;
+				types.push(fs.name);
 			}
-			if (types.length > 0) types = "- " + types;
-			$("#filesetTypes").html(types);
+			types = $.grep(types, function(v, k){
+			    return $.inArray(v ,types) === k;
+			});
+			
+			typesString = "";
+			for (var t = 0; t < types.length; t++) {
+				typesString += types[t];
+				if (t < types.length - 1) typesString += ", ";
+			}
+			if (types.length > 0) typesString = "- " + typesString;
+			
+			$("#filesetTypes").html(typesString);
 		});
 		Job.onNewUpload(function(fileset){
+			console.log("Job.onNewUpload", fileset);
 			if (firstFileOrScriptChosen !== null) {
 				firstFileOrScriptChosen();
 				

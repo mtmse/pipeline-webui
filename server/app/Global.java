@@ -19,11 +19,13 @@ import java.util.concurrent.TimeUnit;
 
 
 
+
 //import org.daisy.pipeline.client.Pipeline2;
 import org.daisy.pipeline.client.Pipeline2Exception;
 import org.daisy.pipeline.client.Pipeline2Logger;
 import org.daisy.pipeline.client.http.WSResponse;
 //import org.daisy.pipeline.client.Pipeline2Logger;
+
 
 
 
@@ -187,16 +189,16 @@ public class Global extends GlobalSettings {
 							List<Job> webUiJobs = Job.find.all();
 							
 							for (Job webUiJob : webUiJobs) {
-								if (!"NEW".equals(webUiJob.status) && !"TEMPLATE".equals(webUiJob.status)) {
+								if (webUiJob.engineId != null) {
 									boolean exists = false;
 									for (org.daisy.pipeline.client.models.Job engineJob : engineJobs) {
-										if (webUiJob.id.equals(engineJob.getId())) {
+										if (webUiJob.engineId.equals(engineJob.getId())) {
 											exists = true;
 											break;
 										}
 									}
 									if (!exists) {
-										Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.nicename+")");
+										Logger.info("Deleting job that no longer exists in the Pipeline engine: "+webUiJob.id+" ("+webUiJob.engineId+" - "+webUiJob.nicename+")");
 										webUiJob.delete();
 									}
 								}
@@ -213,7 +215,11 @@ public class Global extends GlobalSettings {
 									}
 									if (!exists) {
 										Logger.info("Adding job from the Pipeline engine that does not exist in the Web UI: "+engineJob.getId());
-										Job webUiJob = new Job(engineJob, User.findById(-1L)); // TODO: ensure that user with ID=-1 exists at this point
+										User notLoggedIn = User.findById(-1L);
+										if (notLoggedIn == null) {
+											notLoggedIn = new User("not-logged-in@example.net", "Not logged in", "not logged in", false);
+										}
+										Job webUiJob = new Job(engineJob, notLoggedIn); // TODO: ensure that user with ID=-1 exists at this point
 										webUiJob.save();
 									}
 								}
