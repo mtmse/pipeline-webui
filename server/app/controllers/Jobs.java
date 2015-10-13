@@ -31,6 +31,7 @@ import org.daisy.pipeline.client.Pipeline2Logger;
 import org.daisy.pipeline.client.filestorage.JobStorage;
 import org.daisy.pipeline.client.models.Argument;
 import org.daisy.pipeline.client.models.Script;
+import org.daisy.pipeline.client.models.Job.Status;
 import org.daisy.pipeline.client.utils.Files;
 
 import play.Logger;
@@ -61,7 +62,6 @@ public class Jobs extends Controller {
 		
 		Job newJob = new Job(user);
 		newJob.save();
-		JsonNode newJobJson = play.libs.Json.toJson(newJob);
 		Logger.debug("created new job: '"+newJob.id+"'");
 		
 		return redirect(routes.Jobs.getJob(newJob.id));
@@ -89,7 +89,10 @@ public class Jobs extends Controller {
 			return forbidden("You are not allowed to restart this job.");
 		}
 		
+		webuiJob.cancelPushNotifications();
+		
 		if (webuiJob.engineId != null) {
+			Logger.info("deleting old job: "+webuiJob.engineId);
 			Application.ws.deleteJob(webuiJob.engineId);
 			webuiJob.engineId = null;
 		}
@@ -97,21 +100,23 @@ public class Jobs extends Controller {
 		webuiJob.status = "NEW";
 		webuiJob.notifiedComplete = false;
 		org.daisy.pipeline.client.models.Job clientlibJob = webuiJob.asJob();
+		clientlibJob.setStatus(org.daisy.pipeline.client.models.Job.Status.IDLE);
+		webuiJob.status = "IDLE";
+		webuiJob.started = null;
+		webuiJob.finished = null;
 		webuiJob.save();
 		
 		Logger.info("------------------------------ Posting job... ------------------------------");
-		Logger.info(XML.toString(clientlibJob.toJobRequestXml(true)));
+		Logger.debug(XML.toString(clientlibJob.toJobRequestXml(true)));
 		clientlibJob = Application.ws.postJob(clientlibJob);
 		if (clientlibJob == null) {
 			Logger.error("An error occured when trying to post job");
 			return internalServerError("An error occured when trying to post job");
 		}
 		webuiJob.setJob(clientlibJob);
-		webuiJob.status = "IDLE";
 		webuiJob.save();
 		
 		NotificationConnection.pushJobNotification(webuiJob.user, new Notification("job-status-"+webuiJob.id, org.daisy.pipeline.client.models.Job.Status.IDLE));
-		webuiJob.cancelPushNotifications();
 		webuiJob.pushNotifications();
 		
 		User.flashBrowserId(user);
@@ -671,7 +676,6 @@ public class Jobs extends Controller {
 							}
 				        	jobStorage.save(true); // true = move files instead of copying
 				        	
-				        	Logger.info("uploads result object: "+result);
 							NotificationConnection.push(user.id, new Notification("uploads", result));
     					}
     				},

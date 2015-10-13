@@ -171,14 +171,19 @@ public class Job extends Model implements Comparable<Job> {
 	}
 	
 	public void cancelPushNotifications() {
-		if (pushNotifier != null)
+		Logger.debug("Cancelling push notifications for job #"+id+" with engineId="+engineId);
+		if (pushNotifier != null) {
 			pushNotifier.cancel();
+			pushNotifier = null;
+		}
 	}
 	
 	public void pushNotifications() {
-		if (pushNotifier != null)
+		if (pushNotifier != null) {
 			return;
-
+		}
+		
+		Logger.debug("Starting new push notifications for job #"+id+" with engineId="+engineId);
 		pushNotifier = Akka.system().scheduler().schedule(
 				Duration.create(0, TimeUnit.SECONDS),
 				Duration.create(500, TimeUnit.MILLISECONDS),
@@ -350,9 +355,7 @@ public class Job extends Model implements Comparable<Job> {
 	}
 
 	private void jobUpdateHelper() {
-		if (engineId == null) {
-			engineId = clientlibJob.getId();
-		}
+		engineId = clientlibJob.getId();
 		if (nicename == null) {
 			nicename = clientlibJob.getNicename();
 		}
@@ -461,6 +464,7 @@ public class Job extends Model implements Comparable<Job> {
 
 	/** Use this method to get the job from the engine to ensure that the XML in the webuis job storage is always up to date */
 	public org.daisy.pipeline.client.models.Job getJobFromEngine(int fromSequence) {
+		Logger.debug("Getting job from engine: "+engineId);
 		if (engineId == null) {
 			return null;
 		}
