@@ -42,7 +42,7 @@ packageDescription := "A web-based user interface for the DAISY Pipeline 2."
 // <http://www.scala-sbt.org/sbt-native-packager/formats/linux.html>
 // These settings are common for both Debian and RPM packages.
 packageName in Linux := "daisy-pipeline2-webui"
-daemonUser in Linux := "pipeline2"
+daemonUser in Linux := "tpbadmin"
 daemonGroup in Linux := (daemonUser in Linux).value
 executableScriptName := "pipeline2-webui"
 defaultLinuxInstallLocation := "/opt"
