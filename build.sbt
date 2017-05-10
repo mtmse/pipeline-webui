@@ -42,7 +42,7 @@ packageDescription := "A web-based user interface for the DAISY Pipeline 2."
 // <http://www.scala-sbt.org/sbt-native-packager/formats/linux.html>
 // These settings are common for both Debian and RPM packages.
 packageName in Linux := "daisy-pipeline2-webui"
-daemonUser in Linux := "tpbadmin"
+daemonUser in Linux := "pipeline2"
 daemonGroup in Linux := (daemonUser in Linux).value
 executableScriptName := "pipeline2-webui"
 defaultLinuxInstallLocation := "/opt"
@@ -70,7 +70,6 @@ serverLoading in Debian := SystemV
 // <http://www.scala-sbt.org/sbt-native-packager/formats/rpm.html>
 // For packaging on Linux (CentOS/Redhat "RPM" flavor)
 // Informational, dependency, meta, scriptlet, systemV start and script settings
-packageName in Rpm := "pipeline2-webui"
 version in Rpm := version.value.replaceAll("-.*","")
 rpmRelease := (version.value+"-1-").replaceAll("^.*?-(\\d+)-.*$","$1")
 packageArchitecture in Rpm := "noarch"
@@ -80,15 +79,73 @@ rpmLicense := Option("LGPLv3")
 rpmAutoreq += "java8-runtime"
 rpmAutoreq += "pipeline2"
 serverLoading in Rpm := Upstart 
+linuxPackageMappings in Rpm += {
+	//val file = sourceDirectory.value / "rpm" / "etc" / "init.d" / "pipeline2-webui"
+	//
+	packageMapping((new File("rpm/etc/init.d/pipeline2-webui"), "/etc/init.d/pipeline2-webui"))
+}
+// writing scripts inline due to a problem with file inclusion where each script was included twice
 maintainerScripts in Rpm := Map(
-  Pre -> Seq("""echo "pre-install""""),
-  Post -> Seq("""rm -rf /opt/daisy-pipeline2-webui/webui/dp2webui && cp -rf /opt/daisy-pipeline2-webui/webui/db-empty /opt/daisy-pipeline2-webui/webui/dp2webui && rm -rf /opt/daisy-pipeline2-webui/webui/db-empty && service daisy-pipeline2-webui start"""),
-  //Post -> Seq("""echo "post-install""""),
+  Pre -> Seq("""
+#!/bin/sh
+# preinst script for daisy-pipeline2-webui
+#
+
+USER=pipeline2
+DATA=/var/opt/daisy-pipeline2-webui
+
+echo "installing now"
+
+# create ${USER} group
+if ! getent group ${USER} >/dev/null; then
+    groupadd --system ${USER}
+fi
+
+# create ${USER} user
+if ! getent passwd ${USER} >/dev/null; then
+    adduser --system --gid ${USER} --home ${DATA} --no-create-home --shell /sbin/nologin \
+        --comment "DAISY Pipeline 2 server" ${USER}
+fi
+"""),
+  Post -> Seq("""
+#!/bin/bash
+
+USER=pipeline2
+HOME=/opt/daisy-pipeline2-webui
+DATA=/var/opt/daisy-pipeline2-webui
+LOG=/var/log/daisy-pipeline2-webui
+
+mkdir -p ${DATA}
+mkdir -p ${LOG}
+chown -R ${USER}:${USER} ${HOME}
+chown -R ${USER}:${USER} ${DATA}
+chown -R ${USER}:${USER} ${LOG}
+
+touch ${LOG}/pipeline2.log
+chown ${USER}:${USER} ${LOG}/pipeline2.log
+"""),
   Pretrans -> Seq("""echo "pretrans""""),
   Posttrans -> Seq("""echo "posttrans""""),
-  Preun -> Seq("""rm -rf /opt/daisy-pipeline2-webui"""),
-  Postun -> Seq("""echo "post-uninstall"""")
-  )
+  Preun -> Seq("""
+#!/bin/bash
+
+echo --- Stopping Pipeline2 WebUI ---
+service=pipeline2-webui
+if [[ $(ps -ef | grep -v grep | grep $service | wc -l) > 0 ]] ; then
+  service $service stop
+fi
+
+"""),
+  Postun -> Seq("""
+#!/bin/bash
+
+
+if [ $1 = 0 ] ; then 
+	rm -rf /opt/daisy-pipeline2-webui
+fi
+#	rm -f /tmp/dp2key.txt
+""")
+)
 rpmBrpJavaRepackJars := false
 
 com.typesafe.sbt.packager.SettingsHelper.makeDeploymentSettings(Debian, packageBin in Debian, "deb")
