@@ -131,8 +131,8 @@ chown ${USER}:${USER} ${LOG}/pipeline2.log
 
 echo --- Stopping Pipeline2 WebUI ---
 service=pipeline2-webui
-if [[ $(ps -ef | grep -v grep | grep $service | wc -l) > 0 ]] ; then
-  service $service stop
+if [[ $(ps -ef | grep -v grep | grep "$service" | wc -l) > 0 ]] ; then
+  service "$service" stop
 fi
 
 """),

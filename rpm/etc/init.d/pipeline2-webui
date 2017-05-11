@@ -18,7 +18,7 @@ PROC="$PROG_DIR/$PROC_NAME"
 
 SERVICE_NAME=pipeline2-webui
 RUN_AS_USER=pipeline2
-PID_FILE=/var/run/daisy-pipeline2-webui/play.pid
+PID_FILE=/var/run/daisy-pipeline2-webui.pid
 OPTIONS="&>${LOG}"
 
 umask 0002
@@ -54,6 +54,7 @@ stop() {
         else
           success
         fi
+	rm "$PID_FILE"
         RETVAL=$?
       else
         success
