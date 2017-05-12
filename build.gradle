@@ -7,12 +7,45 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'se.mtm.gradle:gradle-artifactory-rpm-plugin:1.0.11'
+        classpath 'se.mtm.gradle:gradle-artifactory-rpm-plugin:1.0.23'
     }
 }
 
 artifactoryRpm {
-	distributionDir = "target/rpm/RPMS/noarch"
+	packageName = "daisy-pipeline2-webui"
+}
+
+task copyRpm(type: Copy) {
+    from 'target/rpm/RPMS/noarch'
+    into 'build/distributions'
+}
+
+promoteToStageRepo.dependsOn copyRpm
+
+def getRPMVersion() {
+    def dir =  new File('target/rpm/RPMS/noarch')
+    def files = dir.listFiles();
+    if (files.size()>1) {
+        throw new GradleException("More than one file in " + dir)
+    } else if (files.size()==1) {
+        def fname = files.first().getName()
+        def matcher = java.util.regex.Pattern.compile("(\\d\\.?)+(-\\d+)?").matcher(fname)
+        def v = version
+        while (matcher.find()) {
+            v = matcher.group()
+        }
+        return v
+    } else {
+        return version
+    }
+}
+
+version = getRPMVersion()
+
+task printVersion() {
+	doLast() {
+		println version
+	}
 }
 
 task wrapper(type: Wrapper) {
