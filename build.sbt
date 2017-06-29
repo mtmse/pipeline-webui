@@ -78,7 +78,7 @@ rpmUrl := Option("https://github.com/daisy/pipeline-webui")
 rpmLicense := Option("LGPLv3")
 rpmAutoreq += "java8-runtime"
 rpmAutoreq += "pipeline2"
-serverLoading in Rpm := Upstart 
+// serverLoading in Rpm := Upstart 
 linuxPackageMappings in Rpm += {
 	//val file = sourceDirectory.value / "rpm" / "etc" / "init.d" / "pipeline2-webui"
 	//
